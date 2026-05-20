@@ -8,6 +8,7 @@ const grid = GridStack.init({
   cellHeight: 512 / 16,
   margin: 2,
   float: true,
+  minRow: 16,
 }, '.grid-stack');
 
 grid.on('change', (event, items) => {
