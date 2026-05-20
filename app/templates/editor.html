@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Kindle Dashboard Editor</title>
+<link rel="stylesheet" href="/static/gridstack.min.css">
+<script src="/static/gridstack.min.js"></script>
+<script src="https://unpkg.com/htmx.org@1.9.10"></script>
+<script src="https://unpkg.com/htmx.org@1.9.10/dist/ext/json-enc.js"></script>
+<style>
+  body { font-family: -apple-system, sans-serif; margin: 0; padding: 16px; }
+  h1 { margin-top: 0; }
+  .layout { display: grid; grid-template-columns: auto 320px; gap: 16px; }
+  .canvas-wrap { background: #fafafa; padding: 8px; border: 1px solid #ccc; }
+  .grid-stack { width: 758px; height: 1024px; border: 1px solid #000; background: #fff; }
+  .panel { display: flex; flex-direction: column; gap: 12px; }
+  .panel > section { border: 1px solid #ccc; padding: 12px; }
+  .palette-btn { display: block; width: 100%; padding: 6px; margin-bottom: 4px;
+                 background: #f0f0f0; border: 1px solid #ccc; cursor: grab; }
+  form.inline { display: inline; }
+  .topbar { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
+</style>
+</head>
+<body>
+<h1>Kindle Dashboard Editor</h1>
+
+<div class="topbar">
+  <label>Dashboard:
+    <select id="dashboard-select" onchange="location.href='/editor?name=' + this.value">
+      {% for name in dashboards %}
+        <option value="{{ name }}"{% if name == selected %} selected{% endif %}>{{ name }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <form class="inline" hx-post="/api/dashboards" hx-swap="none"
+        hx-on::after-request="if(event.detail.successful) window.location.href = '/editor?name=' + new FormData(this).get('name')">
+    <input name="name" placeholder="New dashboard name">
+    <button type="submit">+ New</button>
+  </form>
+</div>
+
+<div class="layout">
+  <div class="canvas-wrap">
+    <div class="grid-stack"></div>
+    <div style="margin-top: 8px;">
+      <button onclick="saveLayout()">💾 Save</button>
+      <a id="preview-link" href="/preview/" target="_blank">👁 Preview</a>
+    </div>
+  </div>
+  <aside class="panel">
+    <section>
+      <h3>Widgets</h3>
+      {% for t in widget_types %}
+        <button class="palette-btn" data-widget-type="{{ t }}"
+                onclick="addWidget('{{ t }}')">+ {{ t }}</button>
+      {% endfor %}
+    </section>
+    <section>
+      <h3>Widget config</h3>
+      <div id="widget-config">Select a widget on the canvas.</div>
+    </section>
+    <section id="dashboards-list">
+      <h3>All dashboards</h3>
+      <ul>
+        {% for name in dashboards %}
+          <li>{{ name }}
+            <button hx-delete="/api/dashboards/{{ name }}"
+                    hx-confirm="Delete {{ name }}?" hx-target="closest li" hx-swap="outerHTML">×</button>
+          </li>
+        {% endfor %}
+      </ul>
+    </section>
+  </aside>
+</div>
+
+<script src="/static/editor.js"></script>
+</body>
+</html>

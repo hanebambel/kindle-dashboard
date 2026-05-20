@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+*.egg-info/
+config/secrets.json
+config/dashboards/*.json
+!config/dashboards/example.json
+*.tmp
+.DS_Store

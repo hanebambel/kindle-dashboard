@@ -1,0 +1,9 @@
+<div class="widget widget-calendar">
+  <div class="calendar-header">Upcoming</div>
+  <ul class="calendar-events">
+    {% for ev in events %}
+      <li><span class="cal-when">{{ ev.when }}</span> <span class="cal-summary">{{ ev.summary }}</span></li>
+    {% endfor %}
+    {% if not events %}<li class="cal-empty">No events</li>{% endif %}
+  </ul>
+</div>

@@ -1,0 +1,14 @@
+{
+  "name": "example",
+  "size": { "w": 758, "h": 1024 },
+  "grid": { "cols": 12, "rows": 16 },
+  "dither": "fs",
+  "widgets": [
+    {
+      "id": "w1",
+      "type": "clock",
+      "pos": { "x": 0, "y": 0, "w": 12, "h": 2 },
+      "config": { "format": "HH:mm" }
+    }
+  ]
+}

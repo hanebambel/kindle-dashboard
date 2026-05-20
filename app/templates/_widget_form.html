@@ -1,0 +1,36 @@
+<form hx-patch="/api/dashboards/{{ dashboard }}/widgets/{{ widget.id }}"
+      hx-ext="json-enc" hx-trigger="submit" hx-swap="none">
+  <h4>{{ widget.type }} ({{ widget.id }})</h4>
+  {% for key, prop in schema.properties.items() %}
+    <label style="display:block; margin: 6px 0;">
+      {{ prop.title or key }}
+      {% set value = widget.config.get(key, prop.default if 'default' in prop else '') %}
+      {% if prop.type == "integer" or prop.type == "number" %}
+        <input type="number" name="config[{{ key }}]" value="{{ value }}"
+               {% if prop.type == 'integer' %}step="1"{% else %}step="any"{% endif %}>
+      {% else %}
+        <input type="text" name="config[{{ key }}]" value="{{ value }}">
+      {% endif %}
+    </label>
+  {% endfor %}
+  <button type="submit">Save widget</button>
+</form>
+<script>
+  // Convert flat form fields config[key]=value to nested {config:{key:value}}
+  document.body.addEventListener('htmx:configRequest', (ev) => {
+    const params = ev.detail.parameters;
+    if (Object.keys(params).some(k => k.startsWith('config['))) {
+      const config = {};
+      for (const k of Object.keys(params)) {
+        const m = k.match(/^config\[(.+)\]$/);
+        if (m) {
+          let v = params[k];
+          if (v !== '' && !isNaN(v)) v = Number(v);
+          config[m[1]] = v;
+          delete params[k];
+        }
+      }
+      ev.detail.parameters = { config };
+    }
+  });
+</script>
