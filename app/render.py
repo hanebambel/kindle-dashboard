@@ -119,3 +119,53 @@ async def render_dashboard_png(dashboard: dict[str, Any]) -> bytes:
     rgba_png = await asyncio.to_thread(_html_to_png_bytes, html, width, height)
     dither = dashboard.get("dither", "fs")
     return await asyncio.to_thread(_to_grayscale, rgba_png, dither)
+
+
+ZOOM_BACK_STRIP_PX = 80
+
+
+def _find_widget_cfg(dashboard: dict[str, Any], widget_id: str) -> dict[str, Any]:
+    for w in dashboard["widgets"]:
+        if w["id"] == widget_id:
+            return w
+    raise KeyError(f"widget {widget_id!r} not in dashboard {dashboard['name']!r}")
+
+
+async def _fetch_zoom_body(widget_cfg: dict[str, Any]) -> tuple[str, str | None]:
+    """Returns (body_html, error). On error, body_html is ''."""
+    try:
+        widget = get_widget(widget_cfg["type"])
+        fetch_detail = getattr(widget, "fetch_detail", widget.fetch)
+        template_name = getattr(widget, "detail_template", None) or widget.template
+        ctx = await fetch_detail(widget_cfg.get("config", {}))
+        tpl = _env.get_template(template_name)
+        body = await tpl.render_async(**ctx)
+        return body, None
+    except Exception as exc:  # noqa: BLE001
+        return "", str(exc) or type(exc).__name__
+
+
+async def render_zoom_html(dashboard: dict[str, Any], widget_id: str) -> str:
+    widget_cfg = _find_widget_cfg(dashboard, widget_id)
+    body, error = await _fetch_zoom_body(widget_cfg)
+    if error is not None:
+        body = f'<div class="widget widget-error">&#9888; {error}</div>'
+    width = dashboard["size"]["w"]
+    height = dashboard["size"]["h"]
+    template = _env.get_template("zoom.html")
+    return await template.render_async(
+        width=width,
+        height=height,
+        body_h=height - ZOOM_BACK_STRIP_PX,
+        strip_h=ZOOM_BACK_STRIP_PX,
+        body=body,
+    )
+
+
+async def render_zoom_png(dashboard: dict[str, Any], widget_id: str) -> bytes:
+    html = await render_zoom_html(dashboard, widget_id)
+    width = dashboard["size"]["w"]
+    height = dashboard["size"]["h"]
+    rgba_png = await asyncio.to_thread(_html_to_png_bytes, html, width, height)
+    dither = dashboard.get("dither", "fs")
+    return await asyncio.to_thread(_to_grayscale, rgba_png, dither)

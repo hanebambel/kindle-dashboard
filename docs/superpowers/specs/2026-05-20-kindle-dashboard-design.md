@@ -312,3 +312,8 @@ End-to-end smoke test for the finished v1:
 - `config/dashboards/example.json` — example config
 - `deploy/kindledashboard.service` — systemd unit
 - `tests/test_widgets.py`, `tests/test_render.py`
+
+## Update — touch + Kindle client
+
+Touch handling and the in-repo Kindle client are designed in
+[2026-05-20-kindle-client-touch-design.md](2026-05-20-kindle-client-touch-design.md).

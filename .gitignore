@@ -8,3 +8,4 @@ config/dashboards/*.json
 !config/dashboards/example.json
 *.tmp
 .DS_Store
+kindle_client/build/
