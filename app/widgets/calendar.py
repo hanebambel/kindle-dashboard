@@ -54,13 +54,17 @@ class ICloudCalendarWidget:
 
         parsed = []
         for ev in events:
-            for vevent in ev.icalendar_instance.vevent_list:
-                start = vevent.dtstart.value
+            for vevent in ev.icalendar_instance.walk("VEVENT"):
+                dtstart = vevent.get("DTSTART")
+                if dtstart is None:
+                    continue
+                start = dtstart.dt
                 if isinstance(start, datetime):
                     when = start.strftime("%a %d.%m. %H:%M")
                 else:
                     when = start.strftime("%a %d.%m.") + " · all day"
-                parsed.append({"summary": str(vevent.summary.value), "when": when, "sort": start})
+                summary = str(vevent.get("SUMMARY", ""))
+                parsed.append({"summary": summary, "when": when, "sort": start})
         parsed.sort(key=lambda e: e["sort"].isoformat() if isinstance(e["sort"], datetime) else str(e["sort"]))
         for e in parsed:
             e.pop("sort")
