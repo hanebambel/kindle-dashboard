@@ -33,4 +33,12 @@
       ev.detail.parameters = { config };
     }
   });
+  // After a successful PATCH save, refresh the widget preview iframe.
+  document.body.addEventListener('htmx:afterRequest', (ev) => {
+    if (ev.detail.successful && ev.detail.requestConfig.verb === 'patch') {
+      if (typeof loadWidgetPreview === 'function') {
+        loadWidgetPreview('{{ widget.id }}');
+      }
+    }
+  });
 </script>

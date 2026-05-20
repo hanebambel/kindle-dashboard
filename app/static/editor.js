@@ -5,10 +5,25 @@ if (dashboardName) {
 
 const grid = GridStack.init({
   column: 12,
-  cellHeight: 1024 / 16,
+  cellHeight: 512 / 16,
   margin: 2,
   float: true,
 }, '.grid-stack');
+
+grid.on('change', (event, items) => {
+  for (const item of items) {
+    updateTileDims(item.el);
+  }
+});
+
+function updateTileDims(el) {
+  const x = parseInt(el.getAttribute('gs-x'), 10);
+  const y = parseInt(el.getAttribute('gs-y'), 10);
+  const w = parseInt(el.getAttribute('gs-w'), 10);
+  const h = parseInt(el.getAttribute('gs-h'), 10);
+  const dims = el.querySelector('.tile-dims');
+  if (dims) dims.textContent = `${w} × ${h} @ (${x},${y})`;
+}
 
 let nextId = 1;
 
@@ -35,9 +50,28 @@ function buildItem(w) {
   el.setAttribute('gs-h', w.pos.h);
   const content = document.createElement('div');
   content.classList.add('grid-stack-item-content');
-  content.textContent = w.type + ' (' + w.id + ')';
-  content.style.cursor = 'pointer';
-  content.onclick = () => loadConfigForm(w.id);
+
+  const head = document.createElement('div');
+  head.classList.add('tile-head');
+  const typeSpan = document.createElement('span');
+  typeSpan.classList.add('tile-type');
+  typeSpan.textContent = w.type;
+  const idSpan = document.createElement('span');
+  idSpan.classList.add('tile-id');
+  idSpan.textContent = w.id;
+  head.appendChild(typeSpan);
+  head.appendChild(idSpan);
+
+  const dims = document.createElement('div');
+  dims.classList.add('tile-dims');
+  dims.textContent = `${w.pos.w} × ${w.pos.h} @ (${w.pos.x},${w.pos.y})`;
+
+  content.appendChild(head);
+  content.appendChild(dims);
+  content.onclick = () => {
+    loadConfigForm(w.id);
+    loadWidgetPreview(w.id);
+  };
   el.appendChild(content);
   return el;
 }
@@ -48,12 +82,22 @@ function loadConfigForm(wid) {
     { target: '#widget-config' });
 }
 
+function loadWidgetPreview(wid) {
+  const iframe = document.getElementById('widget-preview');
+  const section = document.getElementById('widget-preview-section');
+  iframe.src = `/api/dashboards/${dashboardName}/widgets/${wid}/preview?t=${Date.now()}`;
+  section.style.display = '';
+}
+
 window.addWidget = function(type) {
   const id = 'w' + (nextId++);
   const item = buildItem({ id, type, pos: { x: 0, y: 0, w: 4, h: 3 }, config: {} });
   grid.addWidget(item);
   // Persist immediately so the new widget exists for config-form
-  saveLayout().then(() => loadConfigForm(id));
+  saveLayout().then(() => {
+    loadConfigForm(id);
+    loadWidgetPreview(id);
+  });
 };
 
 window.saveLayout = async function() {

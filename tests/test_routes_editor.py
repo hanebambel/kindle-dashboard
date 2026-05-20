@@ -117,3 +117,32 @@ def test_editor_unknown_name_falls_back_to_first(client) -> None:
     assert resp.status_code == 200
     # Should still render the editor with the first dashboard selected
     assert 'value="a" selected' in resp.text
+
+
+def test_widget_preview_renders_html(client) -> None:
+    c, store = client
+    store.save("demo", {"name": "demo", "size": {"w": 758, "h": 1024},
+                        "grid": {"cols": 12, "rows": 16}, "dither": "fs",
+                        "widgets": [{"id": "w1", "type": "clock",
+                                     "pos": {"x": 0, "y": 0, "w": 6, "h": 4},
+                                     "config": {"format": "HH:mm"}}]})
+    resp = c.get("/api/dashboards/demo/widgets/w1/preview")
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("text/html")
+    # Should contain rendered clock-time element
+    assert "clock-time" in resp.text
+
+
+def test_widget_preview_unknown_widget_returns_404(client) -> None:
+    c, store = client
+    store.save("demo", {"name": "demo", "size": {"w": 758, "h": 1024},
+                        "grid": {"cols": 12, "rows": 16}, "dither": "fs",
+                        "widgets": []})
+    resp = c.get("/api/dashboards/demo/widgets/nope/preview")
+    assert resp.status_code == 404
+
+
+def test_widget_preview_unknown_dashboard_returns_404(client) -> None:
+    c, store = client
+    resp = c.get("/api/dashboards/nodash/widgets/w1/preview")
+    assert resp.status_code == 404

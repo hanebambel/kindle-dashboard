@@ -48,6 +48,21 @@ async def _fetch_item(widget_cfg: dict[str, Any]) -> dict[str, Any]:
         }
 
 
+async def render_widget_html(widget_cfg: dict[str, Any]) -> str:
+    """Render one widget to standalone HTML (with dashboard styles) for previewing in the editor."""
+    item = await _fetch_item(widget_cfg)
+    body_html = ""
+    if not item["error"]:
+        widget_tpl = _env.get_template(item["template"])
+        body_html = await widget_tpl.render_async(**item["ctx"])
+    template = _env.get_template("widget_preview.html")
+    return await template.render_async(
+        body=body_html,
+        error=item["error"],
+        widget_type=widget_cfg["type"],
+    )
+
+
 async def render_dashboard_html(dashboard: dict[str, Any]) -> str:
     items = await asyncio.gather(*[_fetch_item(w) for w in dashboard["widgets"]])
     rendered_items = []

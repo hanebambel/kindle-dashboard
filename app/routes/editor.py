@@ -8,6 +8,7 @@ from starlette.requests import Request
 
 from app.config_store import ConfigStore, DashboardNotFound, InvalidDashboard
 from app.deps import get_config_store
+from app.render import render_widget_html
 from app.widgets import REGISTRY, get_widget
 
 
@@ -115,6 +116,20 @@ def widget_config_form(
             "schema": schema,
         },
     )
+
+
+@router.get("/api/dashboards/{name}/widgets/{wid}/preview", response_class=HTMLResponse)
+async def widget_preview(name: str, wid: str,
+                         store: ConfigStore = Depends(get_config_store)) -> HTMLResponse:
+    try:
+        dash = store.load(name)
+    except DashboardNotFound:
+        raise HTTPException(status_code=404)
+    widget_cfg = next((w for w in dash["widgets"] if w["id"] == wid), None)
+    if widget_cfg is None:
+        raise HTTPException(status_code=404)
+    html = await render_widget_html(widget_cfg)
+    return HTMLResponse(content=html)
 
 
 @router.patch("/api/dashboards/{name}/widgets/{wid}")
