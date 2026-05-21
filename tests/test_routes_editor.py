@@ -146,3 +146,86 @@ def test_widget_preview_unknown_dashboard_returns_404(client) -> None:
     c, store = client
     resp = c.get("/api/dashboards/nodash/widgets/w1/preview")
     assert resp.status_code == 404
+
+
+def test_delete_widget_removes_from_dashboard(client) -> None:
+    c, store = client
+    store.save("demo", {
+        "name": "demo", "size": {"w": 758, "h": 1024},
+        "grid": {"cols": 12, "rows": 16}, "dither": "fs",
+        "widgets": [
+            {"id": "w1", "type": "clock", "pos": {"x": 0, "y": 0, "w": 6, "h": 3}, "config": {}},
+            {"id": "w2", "type": "clock", "pos": {"x": 6, "y": 0, "w": 6, "h": 3}, "config": {}},
+        ],
+    })
+    resp = c.delete("/api/dashboards/demo/widgets/w1")
+    assert resp.status_code == 200
+    remaining = [w["id"] for w in store.load("demo")["widgets"]]
+    assert remaining == ["w2"]
+
+
+def test_delete_widget_unknown_widget_returns_404(client) -> None:
+    c, store = client
+    store.save("demo", {"name": "demo", "size": {"w": 758, "h": 1024},
+                        "grid": {"cols": 12, "rows": 16}, "dither": "fs", "widgets": []})
+    resp = c.delete("/api/dashboards/demo/widgets/nope")
+    assert resp.status_code == 404
+
+
+def test_delete_widget_unknown_dashboard_returns_404(client) -> None:
+    c, _store = client
+    resp = c.delete("/api/dashboards/nodash/widgets/w1")
+    assert resp.status_code == 404
+
+
+def test_patch_theme_sets_preset(client) -> None:
+    c, store = client
+    store.save("demo", {"name": "demo", "size": {"w": 758, "h": 1024},
+                        "grid": {"cols": 12, "rows": 16}, "dither": "fs", "widgets": []})
+    resp = c.patch("/api/dashboards/demo/theme", json={"preset": "editorial"})
+    assert resp.status_code == 200
+    assert store.load("demo")["theme"] == {"preset": "editorial"}
+
+
+def test_patch_theme_merges_overrides(client) -> None:
+    c, store = client
+    store.save("demo", {"name": "demo", "size": {"w": 758, "h": 1024},
+                        "grid": {"cols": 12, "rows": 16}, "dither": "fs",
+                        "theme": {"preset": "editorial"}, "widgets": []})
+    resp = c.patch("/api/dashboards/demo/theme",
+                   json={"font_family": "JetBrains Mono", "font_scale": 1.2})
+    assert resp.status_code == 200
+    theme = store.load("demo")["theme"]
+    assert theme["preset"] == "editorial"
+    assert theme["font_family"] == "JetBrains Mono"
+    assert theme["font_scale"] == 1.2
+
+
+def test_patch_theme_null_clears_override(client) -> None:
+    c, store = client
+    store.save("demo", {"name": "demo", "size": {"w": 758, "h": 1024},
+                        "grid": {"cols": 12, "rows": 16}, "dither": "fs",
+                        "theme": {"preset": "editorial", "font_family": "Lora"},
+                        "widgets": []})
+    resp = c.patch("/api/dashboards/demo/theme", json={"font_family": None})
+    assert resp.status_code == 200
+    theme = store.load("demo")["theme"]
+    assert "font_family" not in theme
+    assert theme["preset"] == "editorial"
+
+
+def test_patch_theme_rejects_invalid_preset(client) -> None:
+    c, store = client
+    store.save("demo", {"name": "demo", "size": {"w": 758, "h": 1024},
+                        "grid": {"cols": 12, "rows": 16}, "dither": "fs", "widgets": []})
+    resp = c.patch("/api/dashboards/demo/theme", json={"preset": "bogus"})
+    assert resp.status_code == 400
+
+
+def test_list_themes_returns_presets_and_options(client) -> None:
+    c, _store = client
+    resp = c.get("/api/themes")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert {"presets", "fonts", "border_styles", "densities"} <= data.keys()
+    assert any(p["name"] == "editorial" for p in data["presets"])

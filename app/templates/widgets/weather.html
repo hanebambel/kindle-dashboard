@@ -1,14 +1,17 @@
 <div class="widget widget-weather">
   <div class="weather-now">
-    <span class="weather-temp">{{ current_temp }}°</span>
-    <span class="weather-label">{{ current_label }}</span>
+    <div class="weather-icon">{{ current_icon_svg | safe }}</div>
+    <div class="weather-now-text">
+      <div class="weather-temp">{{ current_temp }}°</div>
+      <div class="weather-label">{{ current_label }}</div>
+    </div>
   </div>
   <div class="weather-forecast">
     {% for day in forecast %}
       <div class="weather-day">
-        <div class="weather-day-date">{{ day.date[5:] }}</div>
+        <div class="weather-day-icon">{{ day.icon_svg | safe }}</div>
         <div class="weather-day-temps">{{ day.max }}° / {{ day.min }}°</div>
-        <div class="weather-day-label">{{ day.label }}</div>
+        <div class="weather-day-date">{{ day.date[5:] }}</div>
       </div>
     {% endfor %}
   </div>

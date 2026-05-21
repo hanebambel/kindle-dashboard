@@ -53,6 +53,34 @@ async def test_render_png_dither_modes() -> None:
 
 @pytest.mark.asyncio
 @freeze_time("2026-05-20 09:00:00")
+async def test_render_html_emits_default_theme_when_unset() -> None:
+    html = await render_dashboard_html(CLOCK_DASHBOARD)
+    assert "--font-family" in html
+    assert "Inter" in html
+    # Default preset uses thin borders (1px solid #000)
+    assert "1px solid #000" in html
+
+
+@pytest.mark.asyncio
+@freeze_time("2026-05-20 09:00:00")
+async def test_render_html_uses_preset_theme() -> None:
+    dash = {**CLOCK_DASHBOARD, "theme": {"preset": "editorial"}}
+    html = await render_dashboard_html(dash)
+    assert "Source Serif 4" in html
+    # editorial has border_style=none
+    assert "--border: none" in html
+
+
+@pytest.mark.asyncio
+@freeze_time("2026-05-20 09:00:00")
+async def test_render_html_applies_theme_override() -> None:
+    dash = {**CLOCK_DASHBOARD, "theme": {"preset": "editorial", "font_family": "JetBrains Mono"}}
+    html = await render_dashboard_html(dash)
+    assert "JetBrains Mono" in html
+
+
+@pytest.mark.asyncio
+@freeze_time("2026-05-20 09:00:00")
 async def test_render_html_isolates_widget_errors() -> None:
     dashboard = {
         "name": "broken",

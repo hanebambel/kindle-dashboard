@@ -18,15 +18,23 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from PIL import Image
 from weasyprint import HTML
 
+from app import theme as theme_mod
 from app.widgets import get_widget
 
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
+STATIC_DIR = Path(__file__).parent / "static"
+_FONTS_BASE_URL = (STATIC_DIR / "fonts").resolve().as_uri()
 _env = Environment(
     loader=FileSystemLoader(TEMPLATES_DIR),
     autoescape=select_autoescape(["html"]),
     enable_async=True,
 )
+
+
+def _resolve_theme(dashboard: dict[str, Any] | None) -> dict[str, Any]:
+    raw = (dashboard or {}).get("theme") if dashboard else None
+    return theme_mod.resolve(raw, fonts_base=_FONTS_BASE_URL)
 
 
 async def _fetch_item(widget_cfg: dict[str, Any]) -> dict[str, Any]:
@@ -48,7 +56,10 @@ async def _fetch_item(widget_cfg: dict[str, Any]) -> dict[str, Any]:
         }
 
 
-async def render_widget_html(widget_cfg: dict[str, Any]) -> str:
+async def render_widget_html(
+    widget_cfg: dict[str, Any],
+    dashboard: dict[str, Any] | None = None,
+) -> str:
     """Render one widget to standalone HTML (with dashboard styles) for previewing in the editor."""
     item = await _fetch_item(widget_cfg)
     body_html = ""
@@ -60,6 +71,7 @@ async def render_widget_html(widget_cfg: dict[str, Any]) -> str:
         body=body_html,
         error=item["error"],
         widget_type=widget_cfg["type"],
+        theme=_resolve_theme(dashboard),
     )
 
 
@@ -84,6 +96,7 @@ async def render_dashboard_html(dashboard: dict[str, Any]) -> str:
         cols=dashboard["grid"]["cols"],
         rows=dashboard["grid"]["rows"],
         items=rendered_items,
+        theme=_resolve_theme(dashboard),
     )
 
 
@@ -159,6 +172,7 @@ async def render_zoom_html(dashboard: dict[str, Any], widget_id: str) -> str:
         body_h=height - ZOOM_BACK_STRIP_PX,
         strip_h=ZOOM_BACK_STRIP_PX,
         body=body,
+        theme=_resolve_theme(dashboard),
     )
 
 

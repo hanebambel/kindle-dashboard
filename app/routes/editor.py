@@ -6,6 +6,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from starlette.requests import Request
 
+from app import theme as theme_mod
 from app.config_store import ConfigStore, DashboardNotFound, InvalidDashboard
 from app.deps import get_config_store
 from app.render import render_widget_html
@@ -41,8 +42,22 @@ def editor_index(
             "dashboards": dashboards,
             "widget_types": sorted(REGISTRY.keys()),
             "selected": selected,
+            "theme_presets": theme_mod.list_presets(),
+            "theme_fonts": theme_mod.list_font_families(),
+            "theme_borders": theme_mod.list_border_styles(),
+            "theme_densities": theme_mod.list_densities(),
         },
     )
+
+
+@router.get("/api/themes")
+def list_themes() -> dict:
+    return {
+        "presets": theme_mod.list_presets(),
+        "fonts": theme_mod.list_font_families(),
+        "border_styles": theme_mod.list_border_styles(),
+        "densities": theme_mod.list_densities(),
+    }
 
 
 @router.post("/api/dashboards")
@@ -128,7 +143,7 @@ async def widget_preview(name: str, wid: str,
     widget_cfg = next((w for w in dash["widgets"] if w["id"] == wid), None)
     if widget_cfg is None:
         raise HTTPException(status_code=404)
-    html = await render_widget_html(widget_cfg)
+    html = await render_widget_html(widget_cfg, dashboard=dash)
     return HTMLResponse(content=html)
 
 
@@ -155,3 +170,47 @@ def patch_widget(
     except InvalidDashboard as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return {"saved": True}
+
+
+@router.delete("/api/dashboards/{name}/widgets/{wid}")
+def delete_widget(
+    name: str,
+    wid: str,
+    store: ConfigStore = Depends(get_config_store),
+) -> dict:
+    try:
+        dash = store.load(name)
+    except DashboardNotFound:
+        raise HTTPException(status_code=404)
+    before = len(dash["widgets"])
+    dash["widgets"] = [w for w in dash["widgets"] if w["id"] != wid]
+    if len(dash["widgets"]) == before:
+        raise HTTPException(status_code=404)
+    try:
+        store.save(name, dash)
+    except InvalidDashboard as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"deleted": wid}
+
+
+@router.patch("/api/dashboards/{name}/theme")
+def patch_theme(
+    name: str,
+    payload: dict[str, Any] = Body(...),
+    store: ConfigStore = Depends(get_config_store),
+) -> dict:
+    try:
+        dash = store.load(name)
+    except DashboardNotFound:
+        raise HTTPException(status_code=404)
+    # Merge payload into existing theme; allow nulls to clear overrides.
+    current = dash.get("theme") or {}
+    merged = {**current, **payload}
+    # Drop keys explicitly set to None so resolver inherits from preset.
+    merged = {k: v for k, v in merged.items() if v is not None}
+    dash["theme"] = merged
+    try:
+        store.save(name, dash)
+    except InvalidDashboard as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"saved": True, "theme": merged}

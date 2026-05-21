@@ -3,36 +3,44 @@
 <head>
 <meta charset="utf-8">
 <style>
+  {{ theme.font_face_css | safe }}
   @page { size: {{ width }}px {{ height }}px; margin: 0; }
+  :root {
+    --font-family: {{ theme.font_family_css | safe }};
+    --font-scale: {{ theme.font_scale }};
+    --border: {{ theme.border }};
+    --divider: {{ theme.divider }};
+    --cell-padding: {{ theme.cell_padding }};
+  }
   html, body { margin: 0; padding: 0; width: {{ width }}px; height: {{ height }}px;
-               font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; color: #000; }
+               font-family: var(--font-family); color: #000; }
   .zoom-body { width: {{ width }}px; height: {{ body_h }}px;
                padding: 16px; box-sizing: border-box; overflow: hidden; }
   .back-strip { width: {{ width }}px; height: {{ strip_h }}px;
                 border-top: 2px solid #000;
                 display: flex; align-items: center; justify-content: center;
-                font-size: 32px; font-weight: 700; }
+                font-size: calc(32px * var(--font-scale)); font-weight: 700; }
   /* Dashboard styles widgets may reference. Kept in sync with dashboard.html. */
   .widget { padding: 6px; }
   .widget-clock { text-align: center; }
-  .clock-time { font-size: 200px; font-weight: 700; line-height: 1; }
-  .clock-date { font-size: 56px; margin-top: 16px; }
+  .clock-time { font-size: calc(200px * var(--font-scale)); font-weight: 700; line-height: 1; }
+  .clock-date { font-size: calc(56px * var(--font-scale)); margin-top: 16px; }
   .widget-weather { display: flex; flex-direction: column; gap: 16px; }
   .weather-now { display: flex; align-items: baseline; gap: 24px; }
-  .weather-temp { font-size: 140px; font-weight: 700; }
-  .weather-label { font-size: 44px; }
+  .weather-temp { font-size: calc(140px * var(--font-scale)); font-weight: 700; }
+  .weather-label { font-size: calc(44px * var(--font-scale)); }
   .weather-forecast { display: flex; gap: 12px; }
-  .weather-day { flex: 1; border: 1px solid #000; padding: 8px; font-size: 28px; text-align: center; }
+  .weather-day { flex: 1; border: var(--border); padding: 8px; font-size: calc(28px * var(--font-scale)); text-align: center; }
   .weather-day-date { font-weight: 700; }
   .widget-iobroker { text-align: center; }
-  .iobroker-label { font-size: 36px; }
-  .iobroker-value { font-size: 120px; font-weight: 700; }
-  .widget-calendar { font-size: 32px; }
+  .iobroker-label { font-size: calc(36px * var(--font-scale)); }
+  .iobroker-value { font-size: calc(120px * var(--font-scale)); font-weight: 700; }
+  .widget-calendar { font-size: calc(32px * var(--font-scale)); }
   .calendar-header { font-weight: 700; margin-bottom: 12px; }
   .calendar-events { list-style: none; padding: 0; margin: 0; }
-  .calendar-events li { padding: 8px 0; border-bottom: 1px solid #000; }
+  .calendar-events li { padding: 8px 0; border-bottom: var(--divider); }
   .cal-when { font-weight: 700; margin-right: 12px; }
-  .widget-error { padding: 24px; font-size: 32px; }
+  .widget-error { padding: 24px; font-size: calc(32px * var(--font-scale)); }
 </style>
 </head>
 <body>

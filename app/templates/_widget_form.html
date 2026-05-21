@@ -1,9 +1,9 @@
 <form hx-patch="/api/dashboards/{{ dashboard }}/widgets/{{ widget.id }}"
       hx-ext="json-enc" hx-trigger="submit" hx-swap="none">
-  <h4>{{ widget.type }} ({{ widget.id }})</h4>
+  <h4>{{ widget.type }} <span style="color: var(--sidebar-muted); font-weight: 400;">({{ widget.id }})</span></h4>
   {% for key, prop in schema.properties.items() %}
-    <label style="display:block; margin: 6px 0;">
-      {{ prop.title or key }}
+    <label>
+      <span>{{ prop.title or key }}</span>
       {% set value = widget.config.get(key, prop.default if 'default' in prop else '') %}
       {% if prop.type == "integer" or prop.type == "number" %}
         <input type="number" name="config[{{ key }}]" value="{{ value }}"

@@ -3,6 +3,7 @@ import os
 from pathlib import Path
 from typing import Any
 
+from app import theme
 from app.widgets import REGISTRY
 
 
@@ -65,3 +66,8 @@ class ConfigStore:
                 raise InvalidDashboard(f"widget missing fields: {sorted(w_missing)}")
             if w["type"] not in REGISTRY:
                 raise InvalidDashboard(f"unknown widget type: {w['type']!r}")
+        if "theme" in data:
+            try:
+                theme.validate(data["theme"])
+            except theme.InvalidTheme as exc:
+                raise InvalidDashboard(f"invalid theme: {exc}") from exc

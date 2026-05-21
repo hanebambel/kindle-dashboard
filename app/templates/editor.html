@@ -8,55 +8,347 @@
 <script src="https://unpkg.com/htmx.org@1.9.10"></script>
 <script src="https://unpkg.com/htmx.org@1.9.10/dist/ext/json-enc.js"></script>
 <style>
-  body { font-family: -apple-system, sans-serif; margin: 0; padding: 16px; }
-  h1 { margin-top: 0; }
-  .layout { display: grid; grid-template-columns: auto 320px; gap: 16px; }
-  .canvas-wrap { background: #fafafa; padding: 8px; border: 1px solid #ccc; }
+  @font-face { font-family: 'Inter'; src: url('/static/fonts/Inter-Regular.woff2') format('woff2'); font-weight: 400; font-style: normal; }
+  @font-face { font-family: 'Inter'; src: url('/static/fonts/Inter-SemiBold.woff2') format('woff2'); font-weight: 600 900; font-style: normal; }
+
+  :root {
+    --accent: #3b82f6;
+    --accent-hover: #2563eb;
+    --danger: #ef4444;
+    --sidebar-bg: #1e293b;
+    --sidebar-surface: #273449;
+    --sidebar-surface-hover: #334155;
+    --sidebar-text: #e2e8f0;
+    --sidebar-muted: #94a3b8;
+    --sidebar-border: #334155;
+    --canvas-bg: #f1f5f9;
+    --canvas-surface: #ffffff;
+    --canvas-text: #0f172a;
+    --canvas-muted: #64748b;
+    --canvas-border: #e2e8f0;
+    --tile-bg: #f8fafc;
+    --tile-border: #cbd5e1;
+    --tile-bg-hover: #f1f5f9;
+    --radius: 6px;
+    --radius-lg: 8px;
+    --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+    --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.08);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; }
+  body {
+    font-family: 'Inter', -apple-system, "Helvetica Neue", Arial, sans-serif;
+    background: var(--canvas-bg);
+    color: var(--canvas-text);
+    font-size: 14px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .topbar {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 20px;
+    background: #ffffff;
+    border-bottom: 1px solid var(--canvas-border);
+    box-shadow: var(--shadow-sm);
+    position: sticky; top: 0; z-index: 10;
+  }
+  .topbar h1 {
+    margin: 0 16px 0 0;
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .topbar label { font-size: 13px; color: var(--canvas-muted); display: flex; align-items: center; gap: 6px; }
+  .topbar select, .topbar input[type="text"], .topbar input:not([type]) {
+    height: 32px;
+    padding: 0 10px;
+    border: 1px solid var(--canvas-border);
+    border-radius: var(--radius);
+    background: #fff;
+    color: var(--canvas-text);
+    font: inherit;
+    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .topbar select:focus, .topbar input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+  }
+  form.inline { display: inline-flex; gap: 6px; align-items: center; }
+
+  .btn {
+    height: 32px;
+    padding: 0 14px;
+    border: 1px solid var(--canvas-border);
+    border-radius: var(--radius);
+    background: #fff;
+    color: var(--canvas-text);
+    font: inherit;
+    font-weight: 500;
+    cursor: pointer;
+    display: inline-flex; align-items: center; gap: 6px;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+  }
+  .btn:hover { background: var(--tile-bg-hover); border-color: var(--canvas-muted); }
+  .btn-primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+  }
+  .btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+  .btn-ghost { background: transparent; border-color: transparent; color: var(--canvas-muted); }
+  .btn-ghost:hover { background: var(--tile-bg-hover); color: var(--canvas-text); }
+  .btn-sm { height: 26px; padding: 0 10px; font-size: 12px; }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 20px;
+    padding: 20px;
+    align-items: start;
+  }
+
+  .canvas-wrap {
+    background: var(--canvas-surface);
+    padding: 16px;
+    border: 1px solid var(--canvas-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+    display: flex; flex-direction: column; align-items: center; gap: 12px;
+  }
   .canvas-frame {
     width: 379px;
     height: 512px;
-    border: 1px solid #000;
+    border: 1px solid var(--canvas-border);
+    border-radius: var(--radius);
     background-color: #fff;
     background-image:
-      linear-gradient(to right, rgba(0,0,0,0.08) 1px, transparent 1px),
-      linear-gradient(to bottom, rgba(0,0,0,0.08) 1px, transparent 1px);
+      radial-gradient(circle, rgba(15, 23, 42, 0.10) 0.8px, transparent 0.8px);
     background-size: calc(100% / 12) calc(100% / 16);
-    box-sizing: border-box;
+    background-position: calc(100% / 24) calc(100% / 32);
+    overflow: hidden;
   }
-  .grid-stack {
-    width: 100%;
-    height: 100%;
-  }
+  .grid-stack { width: 100%; height: 100%; }
   .grid-stack-item-content {
-    background: rgba(0, 0, 0, 0.04);
-    border: 1px solid #888;
-    padding: 4px;
+    background: var(--tile-bg);
+    border: 1px solid var(--tile-border);
+    border-radius: 4px;
+    padding: 4px 6px;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
     font-size: 11px;
-    font-family: -apple-system, sans-serif;
+    color: var(--canvas-text);
     overflow: hidden;
-    box-sizing: border-box;
+    transition: background 0.12s, border-color 0.12s, box-shadow 0.12s;
+    position: relative;
   }
-  .grid-stack-item-content:hover { background: rgba(0, 0, 0, 0.10); cursor: pointer; }
-  .tile-head { display: flex; justify-content: space-between; gap: 6px; }
-  .tile-type { font-weight: 700; }
-  .tile-id { color: #666; }
-  .tile-dims { color: #555; font-family: ui-monospace, "SF Mono", Menlo, monospace; }
-  .panel { display: flex; flex-direction: column; gap: 12px; }
-  .panel > section { border: 1px solid #ccc; padding: 12px; }
-  .palette-btn { display: block; width: 100%; padding: 6px; margin-bottom: 4px;
-                 background: #f0f0f0; border: 1px solid #ccc; cursor: grab; }
-  form.inline { display: inline; }
-  .topbar { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
+  .grid-stack-item-content:hover { background: var(--tile-bg-hover); border-color: var(--canvas-muted); cursor: pointer; }
+  .grid-stack-item.selected > .grid-stack-item-content {
+    background: #fff;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+  }
+  .tile-head { display: flex; justify-content: space-between; gap: 6px; align-items: baseline; }
+  .tile-type { font-weight: 600; }
+  .tile-id { color: var(--canvas-muted); font-size: 10px; }
+  .tile-dims {
+    color: var(--canvas-muted);
+    font-family: 'JetBrains Mono', ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 10px;
+    opacity: 0;
+    transition: opacity 0.12s;
+  }
+  .grid-stack-item-content:hover .tile-dims,
+  .grid-stack-item.selected .tile-dims { opacity: 1; }
+
+  .tile-delete {
+    position: absolute;
+    top: 4px; right: 4px;
+    width: 20px; height: 20px;
+    border-radius: 999px;
+    border: none;
+    background: rgba(15, 23, 42, 0.55);
+    color: #fff;
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    transition: background 0.12s;
+  }
+  .grid-stack-item-content:hover .tile-delete,
+  .grid-stack-item.selected .tile-delete { display: inline-flex; }
+  .tile-delete:hover { background: var(--danger); }
+
+  .canvas-actions { display: flex; gap: 8px; align-items: center; }
+  .canvas-actions a { color: var(--canvas-muted); text-decoration: none; font-size: 13px; padding: 6px 10px; border-radius: var(--radius); }
+  .canvas-actions a:hover { background: var(--tile-bg-hover); color: var(--canvas-text); }
+
+  /* Sidebar */
+  .panel {
+    background: var(--sidebar-bg);
+    color: var(--sidebar-text);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+    overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  .panel section {
+    padding: 16px;
+    border-bottom: 1px solid var(--sidebar-border);
+  }
+  .panel section:last-child { border-bottom: none; }
+  .panel h3 {
+    margin: 0 0 12px 0;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--sidebar-muted);
+  }
+
+  .widget-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .palette-btn {
+    background: var(--sidebar-surface);
+    color: var(--sidebar-text);
+    border: 1px solid transparent;
+    border-radius: var(--radius);
+    padding: 12px 8px;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    text-align: center;
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    transition: background 0.12s, border-color 0.12s;
+  }
+  .palette-btn:hover { background: var(--sidebar-surface-hover); border-color: var(--sidebar-muted); }
+  .palette-icon { font-size: 18px; line-height: 1; }
+
+  .panel-inner {
+    background: var(--sidebar-surface);
+    border-radius: var(--radius);
+    padding: 12px;
+    color: var(--sidebar-text);
+  }
+  .panel-inner .empty { color: var(--sidebar-muted); font-size: 13px; }
+
+  /* Widget config form: applied via _widget_form.html, but styles are scoped here */
+  #widget-config form { display: flex; flex-direction: column; gap: 10px; }
+  #widget-config h4 {
+    margin: 0 0 4px 0; font-size: 13px; font-weight: 600;
+    color: var(--sidebar-text);
+  }
+  #widget-config label {
+    display: flex; flex-direction: column; gap: 4px;
+    font-size: 12px; color: var(--sidebar-muted);
+  }
+  #widget-config input[type="text"], #widget-config input[type="number"], #widget-config input:not([type]) {
+    height: 30px;
+    padding: 0 8px;
+    border: 1px solid var(--sidebar-border);
+    border-radius: var(--radius);
+    background: #0f172a;
+    color: var(--sidebar-text);
+    font: inherit;
+    font-size: 13px;
+    outline: none;
+  }
+  #widget-config input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25); }
+  #widget-config button[type="submit"] {
+    margin-top: 4px;
+    height: 32px;
+    padding: 0 14px;
+    border: none;
+    border-radius: var(--radius);
+    background: var(--accent);
+    color: #fff;
+    font: inherit;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  #widget-config button[type="submit"]:hover { background: var(--accent-hover); }
+
+  /* Theme picker */
+  .theme-control { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
+  .theme-control label { font-size: 11px; color: var(--sidebar-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+  .theme-control select, .theme-control input[type="number"] {
+    height: 30px;
+    padding: 0 8px;
+    border: 1px solid var(--sidebar-border);
+    border-radius: var(--radius);
+    background: #0f172a;
+    color: var(--sidebar-text);
+    font: inherit; font-size: 13px;
+    outline: none;
+  }
+  .theme-control select:focus, .theme-control input:focus { border-color: var(--accent); }
+  .seg {
+    display: flex; gap: 0;
+    background: #0f172a;
+    border: 1px solid var(--sidebar-border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .seg button {
+    flex: 1;
+    height: 28px;
+    background: transparent;
+    color: var(--sidebar-muted);
+    border: none;
+    font: inherit; font-size: 12px;
+    cursor: pointer;
+    padding: 0 8px;
+    transition: background 0.12s, color 0.12s;
+  }
+  .seg button:hover { color: var(--sidebar-text); }
+  .seg button.active { background: var(--accent); color: #fff; }
+
+  #widget-preview {
+    width: 100%;
+    height: 240px;
+    border: 1px solid var(--canvas-border);
+    border-radius: var(--radius);
+    background: #fff;
+  }
+
+  .dashboards-list ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
+  .dashboards-list li {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 6px 8px;
+    border-radius: var(--radius);
+    background: var(--sidebar-surface);
+    font-size: 13px;
+  }
+  .dashboards-list li:hover { background: var(--sidebar-surface-hover); }
+  .dashboards-list .dash-name { font-weight: 500; }
+  .dashboards-list .dash-name.active { color: var(--accent); }
+  .dashboards-list button {
+    background: transparent;
+    border: none;
+    color: var(--sidebar-muted);
+    cursor: pointer;
+    width: 22px; height: 22px;
+    border-radius: var(--radius);
+    font-size: 14px;
+    line-height: 1;
+  }
+  .dashboards-list button:hover { background: var(--danger); color: #fff; }
 </style>
 </head>
 <body>
-<h1>Kindle Dashboard Editor</h1>
 
 <div class="topbar">
-  <label>Dashboard:
+  <h1>Kindle Dashboard</h1>
+  <label>Dashboard
     <select id="dashboard-select" onchange="location.href='/editor?name=' + this.value">
       {% for name in dashboards %}
         <option value="{{ name }}"{% if name == selected %} selected{% endif %}>{{ name }}</option>
@@ -66,7 +358,7 @@
   <form class="inline" hx-post="/api/dashboards" hx-swap="none"
         hx-on::after-request="if(event.detail.successful) window.location.href = '/editor?name=' + new FormData(this).get('name')">
     <input name="name" placeholder="New dashboard name">
-    <button type="submit">+ New</button>
+    <button class="btn btn-sm" type="submit">+ New</button>
   </form>
 </div>
 
@@ -75,34 +367,89 @@
     <div class="canvas-frame">
       <div class="grid-stack"></div>
     </div>
-    <div style="margin-top: 8px;">
-      <button onclick="saveLayout()">💾 Save</button>
-      <a id="preview-link" href="/preview/" target="_blank">👁 Preview</a>
+    <div class="canvas-actions">
+      <button class="btn btn-primary" onclick="saveLayout()">Save</button>
+      <a id="preview-link" href="/preview/" target="_blank">Preview &rarr;</a>
     </div>
   </div>
+
   <aside class="panel">
     <section>
-      <h3>Widgets</h3>
-      {% for t in widget_types %}
-        <button class="palette-btn" data-widget-type="{{ t }}"
-                onclick="addWidget('{{ t }}')">+ {{ t }}</button>
-      {% endfor %}
+      <h3>Theme</h3>
+      <div class="theme-control">
+        <label for="theme-preset">Preset</label>
+        <select id="theme-preset">
+          {% for p in theme_presets %}
+            <option value="{{ p.name }}">{{ p.label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="theme-control">
+        <label for="theme-font">Font</label>
+        <select id="theme-font">
+          <option value="">— from preset —</option>
+          {% for f in theme_fonts %}
+            <option value="{{ f }}">{{ f }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="theme-control">
+        <label for="theme-scale">Font scale</label>
+        <input id="theme-scale" type="number" step="0.05" min="0.5" max="2.0" placeholder="from preset">
+      </div>
+      <div class="theme-control">
+        <label>Borders</label>
+        <div class="seg" id="theme-border">
+          <button data-value="">auto</button>
+          {% for b in theme_borders %}
+            <button data-value="{{ b }}">{{ b }}</button>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="theme-control">
+        <label>Density</label>
+        <div class="seg" id="theme-density">
+          <button data-value="">auto</button>
+          {% for d in theme_densities %}
+            <button data-value="{{ d }}">{{ d }}</button>
+          {% endfor %}
+        </div>
+      </div>
     </section>
+
+    <section>
+      <h3>Widgets</h3>
+      <div class="widget-grid">
+        {% for t in widget_types %}
+          <button class="palette-btn" data-widget-type="{{ t }}" onclick="addWidget('{{ t }}')">
+            <span class="palette-icon">{{ {'clock':'🕐','weather':'🌤','iobroker':'🏠','grafana':'📊','calendar':'📅'}.get(t, '◇') }}</span>
+            <span>{{ t }}</span>
+          </button>
+        {% endfor %}
+      </div>
+    </section>
+
     <section>
       <h3>Widget config</h3>
-      <div id="widget-config">Select a widget on the canvas.</div>
+      <div class="panel-inner" id="widget-config">
+        <div class="empty">Select a widget on the canvas.</div>
+      </div>
     </section>
+
     <section id="widget-preview-section" style="display: none;">
       <h3>Live preview</h3>
-      <iframe id="widget-preview" style="width: 100%; height: 220px; border: 1px solid #ccc; background: #fff;"></iframe>
+      <iframe id="widget-preview"></iframe>
     </section>
-    <section id="dashboards-list">
+
+    <section class="dashboards-list">
       <h3>All dashboards</h3>
       <ul>
         {% for name in dashboards %}
-          <li>{{ name }}
+          <li>
+            <span class="dash-name {% if name == selected %}active{% endif %}">{{ name }}</span>
             <button hx-delete="/api/dashboards/{{ name }}"
-                    hx-confirm="Delete {{ name }}?" hx-target="closest li" hx-swap="outerHTML">×</button>
+                    hx-confirm="Delete {{ name }}?" hx-target="closest li" hx-swap="outerHTML"
+                    title="Delete dashboard">×</button>
           </li>
         {% endfor %}
       </ul>

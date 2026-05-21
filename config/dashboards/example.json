@@ -1,20 +1,69 @@
 {
   "name": "example",
-  "size": { "w": 758, "h": 1024 },
-  "grid": { "cols": 12, "rows": 16 },
+  "size": {
+    "w": 758,
+    "h": 1024
+  },
+  "grid": {
+    "cols": 12,
+    "rows": 16
+  },
   "dither": "fs",
   "widgets": [
     {
       "id": "w1",
       "type": "clock",
-      "pos": { "x": 0, "y": 0, "w": 12, "h": 3 },
-      "config": { "format": "HH:mm" }
+      "pos": {
+        "x": 0,
+        "y": 3,
+        "w": 12,
+        "h": 3
+      },
+      "config": {
+        "format": "HH:mm"
+      }
     },
     {
       "id": "w2",
       "type": "weather",
-      "pos": { "x": 0, "y": 3, "w": 12, "h": 5 },
-      "config": { "lat": 48.137, "lon": 11.575, "days": 3 }
+      "pos": {
+        "x": 0,
+        "y": 6,
+        "w": 12,
+        "h": 5
+      },
+      "config": {
+        "lat": 48.137,
+        "lon": 11.575,
+        "days": 3
+      }
+    },
+    {
+      "id": "w3",
+      "type": "iobroker",
+      "pos": {
+        "x": 0,
+        "y": 11,
+        "w": 4,
+        "h": 3
+      },
+      "config": {}
+    },
+    {
+      "id": "w4",
+      "type": "calendar",
+      "pos": {
+        "x": 0,
+        "y": 0,
+        "w": 4,
+        "h": 3
+      },
+      "config": {}
     }
-  ]
+  ],
+  "theme": {
+    "preset": "editorial",
+    "border_style": "thin",
+    "density": "roomy"
+  }
 }
