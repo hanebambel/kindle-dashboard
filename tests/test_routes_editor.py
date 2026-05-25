@@ -6,6 +6,8 @@ from fastapi.testclient import TestClient
 from app.config_store import ConfigStore
 from app.deps import get_config_store
 from app.main import app
+from app.widgets import REGISTRY
+from app.widgets.base import WidgetError
 
 
 @pytest.fixture
@@ -84,6 +86,25 @@ def test_widget_config_form_renders(client) -> None:
     assert "lon" in resp.text
 
 
+def test_widget_config_form_renders_enum_select(client) -> None:
+    c, store = client
+    store.save("demo", {"name": "demo", "size": {"w": 758, "h": 1024},
+                        "grid": {"cols": 12, "rows": 16}, "dither": "fs",
+                        "widgets": [{"id": "w1", "type": "calendar",
+                                     "pos": {"x": 0, "y": 0, "w": 6, "h": 4},
+                                     "config": {
+                                         "username": "user@icloud.com",
+                                         "password": "$icloud_app_password",
+                                         "calendar_name": "Home",
+                                     }}]})
+
+    resp = c.get("/api/dashboards/demo/widgets/w1/config-form")
+
+    assert resp.status_code == 200
+    assert 'name="config[date_time_format]"' in resp.text
+    assert '<option value="german">German</option>' in resp.text
+
+
 def test_patch_widget_config(client) -> None:
     c, store = client
     store.save("demo", {"name": "demo", "size": {"w": 758, "h": 1024},
@@ -131,6 +152,34 @@ def test_widget_preview_renders_html(client) -> None:
     assert resp.headers["content-type"].startswith("text/html")
     # Should contain rendered clock-time element
     assert "clock-time" in resp.text
+
+
+def test_widget_preview_shows_full_error_message(client, monkeypatch) -> None:
+    c, store = client
+    message = "missing token\nset grafana_token in config/secrets.json\nthen refresh the preview"
+
+    class BrokenPreviewWidget:
+        type = "broken-preview"
+        template = "widgets/clock.html"
+        config_schema = {}
+
+        async def fetch(self, cfg: dict) -> dict:
+            raise WidgetError(message)
+
+    monkeypatch.setitem(REGISTRY, BrokenPreviewWidget.type, BrokenPreviewWidget)
+    store.save("demo", {"name": "demo", "size": {"w": 758, "h": 1024},
+                        "grid": {"cols": 12, "rows": 16}, "dither": "fs",
+                        "widgets": [{"id": "w1", "type": "broken-preview",
+                                     "pos": {"x": 0, "y": 0, "w": 6, "h": 4},
+                                     "config": {}}]})
+
+    resp = c.get("/api/dashboards/demo/widgets/w1/preview")
+
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("text/html")
+    assert message in resp.text
+    assert "white-space: pre-wrap" in resp.text
+    assert "overflow-wrap: anywhere" in resp.text
 
 
 def test_widget_preview_unknown_widget_returns_404(client) -> None:

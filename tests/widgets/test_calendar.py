@@ -40,6 +40,41 @@ async def test_calendar_fetch_returns_upcoming_events(tmp_path) -> None:
 
     assert len(ctx["events"]) == 2
     assert ctx["events"][0]["summary"] == "Standup"
+    assert ctx["events"][0]["date_label"] == "Wed 20.05."
+    assert ctx["events"][0]["time_label"] == "10:00"
+
+
+@pytest.mark.asyncio
+async def test_calendar_fetch_supports_german_date_time_format(tmp_path) -> None:
+    secrets = SecretsStore(tmp_path / "s.json")
+    now = datetime(2026, 5, 20, 9, 0, tzinfo=timezone.utc)
+
+    fake_cal = MagicMock()
+    event_instance = MagicMock()
+    event_instance.summary.value = "Arzttermin"
+    event_instance.dtstart.value = now + timedelta(hours=2)
+    event = MagicMock()
+    event.icalendar_instance.vevent_list = [event_instance]
+    fake_cal.search.return_value = [event]
+
+    fake_principal = MagicMock()
+    fake_principal.calendar.return_value = fake_cal
+    fake_client = MagicMock()
+    fake_client.principal.return_value = fake_principal
+
+    with freeze_time(now), \
+         patch("app.widgets.calendar.caldav.DAVClient", return_value=fake_client):
+        widget = ICloudCalendarWidget(secrets=secrets)
+        ctx = await widget.fetch({
+            "username": "user@icloud.com",
+            "password": "plain-pw",
+            "calendar_name": "Home",
+            "max_events": 5,
+            "date_time_format": "german",
+        })
+
+    assert ctx["events"][0]["date_label"] == "Mi 20.05."
+    assert ctx["events"][0]["time_label"] == "11:00 Uhr"
 
 
 @pytest.mark.asyncio
@@ -57,3 +92,4 @@ def test_calendar_metadata() -> None:
     widget = ICloudCalendarWidget(secrets=None)
     assert widget.type == "calendar"
     assert "username" in widget.config_schema["properties"]
+    assert "date_time_format" in widget.config_schema["properties"]

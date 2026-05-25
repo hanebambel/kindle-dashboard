@@ -37,9 +37,14 @@
   .iobroker-value { font-size: calc(120px * var(--font-scale)); font-weight: 700; }
   .widget-calendar { font-size: calc(32px * var(--font-scale)); }
   .calendar-header { font-weight: 700; margin-bottom: 12px; }
-  .calendar-events { list-style: none; padding: 0; margin: 0; }
-  .calendar-events li { padding: 8px 0; border-bottom: var(--divider); }
-  .cal-when { font-weight: 700; margin-right: 12px; }
+  .calendar-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  .calendar-table tr { border-bottom: var(--divider); }
+  .calendar-table td { padding: 8px 0; vertical-align: top; }
+  .cal-when { width: 38%; padding-right: 16px; font-weight: 700; }
+  .cal-date, .cal-time { display: block; }
+  .cal-time { font-weight: 400; opacity: 0.8; }
+  .cal-summary { overflow-wrap: anywhere; }
+  .cal-empty { opacity: 0.7; }
   .widget-error { padding: 24px; font-size: calc(32px * var(--font-scale)); }
 </style>
 </head>

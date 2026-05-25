@@ -55,10 +55,17 @@
       "pos": {
         "x": 0,
         "y": 0,
-        "w": 4,
+        "w": 12,
         "h": 3
       },
-      "config": {}
+      "config": {
+        "username": "j.gabor@me.com",
+        "password": "$icloud_app_password",
+        "calendar_name": "",
+        "max_events": 5,
+        "lookahead_days": 7,
+        "date_time_format": "default"
+      }
     }
   ],
   "theme": {

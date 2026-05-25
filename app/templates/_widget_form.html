@@ -5,7 +5,14 @@
     <label>
       <span>{{ prop.title or key }}</span>
       {% set value = widget.config.get(key, prop.default if 'default' in prop else '') %}
-      {% if prop.type == "integer" or prop.type == "number" %}
+      {% if prop.enum is defined %}
+        <select name="config[{{ key }}]">
+          {% for option in prop.enum %}
+            {% set option_title = prop.enum_titles[loop.index0] if prop.enum_titles is defined and prop.enum_titles|length > loop.index0 else option %}
+            <option value="{{ option }}"{% if value == option %} selected{% endif %}>{{ option_title }}</option>
+          {% endfor %}
+        </select>
+      {% elif prop.type == "integer" or prop.type == "number" %}
         <input type="number" name="config[{{ key }}]" value="{{ value }}"
                {% if prop.type == 'integer' %}step="1"{% else %}step="any"{% endif %}>
       {% else %}

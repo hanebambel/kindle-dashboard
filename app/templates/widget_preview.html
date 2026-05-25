@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <style>
   {{ theme.font_face_css | safe }}
+  html, body { height: 100%; }
   :root {
     --font-family: {{ theme.font_family_css | safe }};
     --font-scale: {{ theme.font_scale }};
@@ -11,7 +12,7 @@
     --divider: {{ theme.divider }};
     --cell-padding: {{ theme.cell_padding }};
   }
-  body { margin: 0; padding: 4px; font-family: var(--font-family); color: #000; background: #fff; }
+  body { margin: 0; padding: 4px; box-sizing: border-box; font-family: var(--font-family); color: #000; background: #fff; }
   .widget { padding: calc(var(--cell-padding) + 2px); overflow: hidden; }
   .widget-clock { text-align: center; }
   .clock-time { font-size: calc(32px * var(--font-scale)); font-weight: 700; line-height: 1; }
@@ -36,10 +37,24 @@
   .widget-grafana img { display: block; max-width: 100%; height: auto; }
   .widget-calendar { font-size: calc(11px * var(--font-scale)); }
   .calendar-header { font-weight: 700; margin-bottom: 4px; }
-  .calendar-events { list-style: none; padding: 0; margin: 0; }
-  .calendar-events li { padding: 2px 0; border-bottom: var(--divider); }
-  .cal-when { font-weight: 700; margin-right: 6px; }
-  .widget-error { color: #000; font-size: calc(12px * var(--font-scale)); padding: 4px; }
+  .calendar-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  .calendar-table tr { border-bottom: var(--divider); }
+  .calendar-table td { padding: 3px 0; vertical-align: top; }
+  .cal-when { width: 38%; padding-right: 8px; font-weight: 700; }
+  .cal-date, .cal-time { display: block; }
+  .cal-time { font-weight: 400; opacity: 0.8; }
+  .cal-summary { overflow-wrap: anywhere; }
+  .cal-empty { opacity: 0.7; }
+  .widget-error {
+    color: #000;
+    font-size: calc(12px * var(--font-scale));
+    padding: 4px;
+    box-sizing: border-box;
+    height: calc(100vh - 8px);
+    overflow: auto;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
 </style>
 </head>
 <body>

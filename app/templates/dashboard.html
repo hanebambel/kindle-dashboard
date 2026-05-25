@@ -57,9 +57,14 @@
   .widget-grafana img { display: block; }
   .widget-calendar { font-size: calc(14px * var(--font-scale)); }
   .calendar-header { font-weight: 700; margin-bottom: 4px; }
-  .calendar-events { list-style: none; padding: 0; margin: 0; }
-  .calendar-events li { padding: 2px 0; border-bottom: var(--divider); }
-  .cal-when { font-weight: 700; margin-right: 6px; }
+  .calendar-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  .calendar-table tr { border-bottom: var(--divider); }
+  .calendar-table td { padding: 4px 0; vertical-align: top; }
+  .cal-when { width: 38%; padding-right: 10px; font-weight: 700; }
+  .cal-date, .cal-time { display: block; }
+  .cal-time { font-weight: 400; opacity: 0.8; }
+  .cal-summary { overflow-wrap: anywhere; }
+  .cal-empty { opacity: 0.7; }
 </style>
 </head>
 <body>
