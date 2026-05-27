@@ -39,7 +39,7 @@ async def test_render_png_dimensions_and_mode() -> None:
     png_bytes = await render_dashboard_png(CLOCK_DASHBOARD)
     img = Image.open(io.BytesIO(png_bytes))
     assert img.size == (758, 1024)
-    assert img.mode in ("L", "1")
+    assert img.mode == "L"
 
 
 @pytest.mark.asyncio
@@ -48,7 +48,7 @@ async def test_render_png_dither_modes() -> None:
     no_dither = await render_dashboard_png({**CLOCK_DASHBOARD, "dither": "none"})
     fs_dither = await render_dashboard_png({**CLOCK_DASHBOARD, "dither": "fs"})
     assert Image.open(io.BytesIO(no_dither)).mode == "L"
-    assert Image.open(io.BytesIO(fs_dither)).mode == "1"
+    assert Image.open(io.BytesIO(fs_dither)).mode == "L"
 
 
 @pytest.mark.asyncio

@@ -37,7 +37,9 @@ func main() {
 
 	// Initial draw
 	if png, err := client.FetchDashboard(); err == nil {
-		_ = disp.Show(png)
+		if err := disp.Show(png); err != nil {
+			log.Printf("initial display: %v", err)
+		}
 	} else {
 		log.Printf("initial fetch failed: %v", err)
 	}

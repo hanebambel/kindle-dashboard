@@ -45,7 +45,7 @@ def test_dash_png_returns_grayscale_image(client: TestClient) -> None:
     assert response.headers["cache-control"] == "no-store"
     img = Image.open(io.BytesIO(response.content))
     assert img.size == (758, 1024)
-    assert img.mode in ("L", "1")
+    assert img.mode == "L"
 
 
 def test_dash_png_unknown_dashboard_returns_404(client: TestClient) -> None:

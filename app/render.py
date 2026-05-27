@@ -120,6 +120,7 @@ def _to_grayscale(png_bytes: bytes, dither: str) -> bytes:
     img = Image.open(io.BytesIO(png_bytes)).convert("L")
     if dither == "fs":
         img = img.convert("1", dither=Image.Dither.FLOYDSTEINBERG)
+        img = img.convert("L")
     buf = io.BytesIO()
     img.save(buf, format="PNG", optimize=True)
     return buf.getvalue()
