@@ -109,3 +109,28 @@ async def test_render_html_isolates_widget_errors() -> None:
     assert "clock-time" in html
     # Layout still emitted
     assert "grid-column" in html
+
+
+@pytest.mark.asyncio
+async def test_widget_ctx_cached_within_ttl(monkeypatch) -> None:
+    from app import render
+    from app.widgets import REGISTRY
+
+    calls = []
+
+    class Counting:
+        type = "counting"
+        template = "widgets/clock.html"
+        config_schema = {}
+        cache_ttl = 60
+
+        async def fetch(self, cfg):
+            calls.append(cfg)
+            return {"time": "12:00", "date": "x"}
+
+    monkeypatch.setitem(REGISTRY, "counting", Counting)
+    monkeypatch.setattr(render, "_cache", {})
+    dash = {**CLOCK_DASHBOARD, "widgets": [{**CLOCK_DASHBOARD["widgets"][0], "type": "counting"}]}
+    await render_dashboard_html(dash)
+    await render_dashboard_html(dash)
+    assert len(calls) == 1

@@ -1,51 +1,43 @@
-<form hx-patch="/api/dashboards/{{ dashboard }}/widgets/{{ widget.id }}"
-      hx-ext="json-enc" hx-trigger="submit" hx-swap="none">
-  <h4>{{ widget.type }} <span style="color: var(--sidebar-muted); font-weight: 400;">({{ widget.id }})</span></h4>
+<form id="widget-form" data-wid="{{ widget.id }}" novalidate>
+  <div class="widget-head">
+    <h3>{{ widget.type }}</h3>
+    <span class="wid">{{ widget.id }}</span>
+    <button class="btn btn-ghost btn-icon" type="button" data-remove="{{ widget.id }}" aria-label="Remove widget">
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+    </button>
+  </div>
+  {% set required = schema.get('required', []) %}
   {% for key, prop in schema.properties.items() %}
-    <label>
-      <span>{{ prop.title or key }}</span>
-      {% set value = widget.config.get(key, prop.default if 'default' in prop else '') %}
-      {% if prop.enum is defined %}
-        <select name="config[{{ key }}]">
-          {% for option in prop.enum %}
-            {% set option_title = prop.enum_titles[loop.index0] if prop.enum_titles is defined and prop.enum_titles|length > loop.index0 else option %}
-            <option value="{{ option }}"{% if value == option %} selected{% endif %}>{{ option_title }}</option>
-          {% endfor %}
-        </select>
-      {% elif prop.type == "integer" or prop.type == "number" %}
-        <input type="number" name="config[{{ key }}]" value="{{ value }}"
-               {% if prop.type == 'integer' %}step="1"{% else %}step="any"{% endif %}>
-      {% else %}
-        <input type="text" name="config[{{ key }}]" value="{{ value }}">
-      {% endif %}
-    </label>
+    {% set value = widget.config.get(key, prop.default if 'default' in prop else '') %}
+    {% set id = 'cfg-' ~ key %}
+    {% if prop.type == 'boolean' %}
+      <label class="field-check"><input type="checkbox" id="{{ id }}" name="{{ key }}"{% if value %} checked{% endif %}> {{ prop.title or key }}</label>
+    {% else %}
+      <label class="field" for="{{ id }}">
+        <span>{{ prop.title or key }}{% if key in required %} <span class="req" aria-hidden="true">*</span>{% endif %}</span>
+        {% if prop.enum is defined %}
+          <select id="{{ id }}" name="{{ key }}">
+            {% for option in prop.enum %}
+              {% set option_title = prop.enum_titles[loop.index0] if prop.enum_titles is defined and prop.enum_titles|length > loop.index0 else option %}
+              <option value="{{ option }}"{% if value == option %} selected{% endif %}>{{ option_title }}</option>
+            {% endfor %}
+          </select>
+        {% elif prop.type in ('integer', 'number') %}
+          <input type="number" id="{{ id }}" name="{{ key }}" value="{{ value }}"
+                 step="{{ '1' if prop.type == 'integer' else 'any' }}"
+                 {%- if prop.minimum is defined %} min="{{ prop.minimum }}"{% endif %}
+                 {%- if prop.maximum is defined %} max="{{ prop.maximum }}"{% endif %}
+                 {%- if key in required %} required{% endif %}>
+        {% else %}
+          {# Secret fields stay readable while they hold a $reference into secrets.json. #}
+          <input type="{{ 'password' if prop.format == 'password' and not (value is string and value.startswith('$')) else 'text' }}"
+                 id="{{ id }}" name="{{ key }}" value="{{ value }}" autocomplete="off" spellcheck="false"
+                 {%- if key in required %} required{% endif %}>
+        {% endif %}
+      </label>
+    {% endif %}
   {% endfor %}
-  <button type="submit">Save widget</button>
+  {% if schema.properties.values() | selectattr('format', 'defined') | list %}
+    <p class="hint">Use <code>$name</code> to reference a value in <code>config/secrets.json</code>.</p>
+  {% endif %}
 </form>
-<script>
-  // Convert flat form fields config[key]=value to nested {config:{key:value}}
-  document.body.addEventListener('htmx:configRequest', (ev) => {
-    const params = ev.detail.parameters;
-    if (Object.keys(params).some(k => k.startsWith('config['))) {
-      const config = {};
-      for (const k of Object.keys(params)) {
-        const m = k.match(/^config\[(.+)\]$/);
-        if (m) {
-          let v = params[k];
-          if (v !== '' && !isNaN(v)) v = Number(v);
-          config[m[1]] = v;
-          delete params[k];
-        }
-      }
-      ev.detail.parameters = { config };
-    }
-  });
-  // After a successful PATCH save, refresh the widget preview iframe.
-  document.body.addEventListener('htmx:afterRequest', (ev) => {
-    if (ev.detail.successful && ev.detail.requestConfig.verb === 'patch') {
-      if (typeof loadWidgetPreview === 'function') {
-        loadWidgetPreview('{{ widget.id }}');
-      }
-    }
-  });
-</script>

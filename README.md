@@ -6,8 +6,8 @@ display the rendered grayscale PNG.
 
 ```
 ┌────────── Raspberry Pi ──────────┐         ┌──── Kindle ────┐
-│  kindledashboard (FastAPI)       │◀── PNG ─│  kindle-dash   │
-│  /editor   /dash/<name>.png      │         │  (polls cron)  │
+│  kindledashboard (FastAPI)       │◀── PNG ─│  kindled (Go)  │
+│  /editor   /dash/<name>.png      │── tap ─▶│  KUAL launcher │
 └──────────────────────────────────┘         └────────────────┘
 ```
 
@@ -76,12 +76,17 @@ Inside a widget config, reference a secret by name: `"token": "$grafana_token"`.
 
 Then open `http://<host>:8080/editor` to create dashboards.
 
+Set `KD_EDITOR_PASSWORD` to protect `/editor` and `/api/*` with HTTP Basic auth
+(any username). Without it the editor is open to everyone on your network and
+a warning is logged at startup. The Kindle endpoints (`/dash`, `/tap`) stay open.
+
 ### 5. Deploy as a service (Raspberry Pi)
 
 A systemd unit is provided in `deploy/kindledashboard.service`. It assumes
 the repo lives at `/opt/kindledashboard` and a user named `pi`.
 
 ```
+echo 'KD_EDITOR_PASSWORD=change-me' | sudo tee /opt/kindledashboard/.env
 sudo cp deploy/kindledashboard.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now kindledashboard
@@ -92,57 +97,50 @@ sudo journalctl -u kindledashboard -f
 
 Open `http://<host>:8080/editor`:
 
-1. Type a name and click **+ New** to create a dashboard.
-2. Click a widget type in the right palette to add it to the canvas.
+1. Click **New** to create a dashboard.
+2. Click a widget type under **Add widget**; it lands in the first free spot.
 3. Drag and resize on the 12×16 grid (758×1024 px, the Kindle Paperwhite native size).
-4. Click a tile to edit that widget's config in the side panel; save.
-5. Click **💾 Save** to persist the layout.
-6. Click **👁 Preview** to open the rendered HTML in a new tab. The PNG endpoint is at `/dash/<name>.png`.
+   With a tile focused, arrow keys move it and <kbd>Del</kbd> removes it.
+4. Click a tile to edit its config in the side panel.
+
+Everything saves automatically. The canvas shows the real rendered PNG (the same
+image the Kindle gets) behind the grid, and it refreshes after every change.
 
 Dashboards are plain JSON files under `config/dashboards/`. Editing them by
 hand is also fine.
 
 ## Kindle setup
 
-Two steps: jailbreak the Kindle, then install
-[`kindle-dash`](https://github.com/pascalw/kindle-dash) on it.
-
-### Jailbreak
-
-Follow the device-specific guide at <https://kindlemodding.org>. It covers
-all current models, the right exploit per firmware version, and how to
-install developer tools (SSH, package manager).
-
-### Install kindle-dash
-
-`kindle-dash` is the on-device client: a small script that polls a URL on a
-cron schedule, displays the returned PNG, and goes back to sleep. Follow the
-install instructions at <https://github.com/pascalw/kindle-dash>.
-
-Point it at your dashboard:
-
-```
-http://<pi-ip>:8080/dash/<dashboard-name>.png
-```
+Jailbreak the Kindle (<https://kindlemodding.org>), install KUAL, then install
+the bundled Go client: see [`kindle_client/README.md`](kindle_client/README.md).
+It polls `/dash/<name>.png`, shows it with `eips`, and forwards taps to
+`/tap/<name>`. Tapping a widget zooms it full-screen; tap "back" to return.
 
 Multiple dashboards are supported — just create more (`morning`, `evening`,
-`livingroom`, …). Time-of-day routing is handled Kindle-side via the
-kindle-dash cron schedule (different URLs at different times); the server
-itself stays stateless about scheduling.
+`livingroom`, …).
 
 ## Endpoints
 
-| Method | Path                                   | Purpose                       |
-|--------|----------------------------------------|-------------------------------|
-| GET    | `/health`                              | liveness probe                |
-| GET    | `/editor`                              | dashboard editor UI           |
-| GET    | `/preview/<name>`                      | render dashboard as HTML      |
-| GET    | `/dash/<name>.png`                     | render dashboard as PNG       |
-| GET    | `/api/dashboards/<name>`               | dashboard config as JSON      |
-| POST   | `/api/dashboards`                      | create empty dashboard        |
-| PUT    | `/api/dashboards/<name>/layout`        | persist widget layout         |
-| PATCH  | `/api/dashboards/<name>/widgets/<id>`  | update one widget's config    |
-| DELETE | `/api/dashboards/<name>`               | delete a dashboard            |
+| Method | Path                                          | Purpose                                 |
+|--------|-----------------------------------------------|-----------------------------------------|
+| GET    | `/health`                                     | liveness probe                          |
+| GET    | `/dash/<name>.png?device=<id>`                | render PNG (per-device zoom state)      |
+| POST   | `/tap/<name>` `{device,x,y}`                  | handle a touch, return the new PNG      |
+| GET    | `/preview/<name>`                             | render dashboard as HTML                |
+| GET    | `/editor`                                     | dashboard editor UI 🔒                  |
+| POST   | `/api/dashboards` (form `name`)               | create empty dashboard (409 if exists) 🔒 |
+| GET    | `/api/dashboards/<name>`                      | dashboard config as JSON 🔒             |
+| DELETE | `/api/dashboards/<name>`                      | delete a dashboard 🔒                   |
+| PUT    | `/api/dashboards/<name>/layout`               | replace the widget list 🔒              |
+| GET    | `/api/dashboards/<name>/widgets/<id>/config-form` | widget settings form (HTML) 🔒      |
+| PATCH  | `/api/dashboards/<name>/widgets/<id>`         | update one widget's config 🔒           |
+| PATCH  | `/api/dashboards/<name>/theme`                | merge theme overrides (`null` clears) 🔒 |
+
+🔒 = requires `KD_EDITOR_PASSWORD` when set.
+
+Widget data is cached per widget config for the widget's `cache_ttl` (clock 0s,
+iobroker 30s, grafana 2 min, calendar 5 min, weather 10 min), so the Kindle's
+poll doesn't hit every upstream API each minute.
 
 If a render fails, `/dash/<name>.png` still returns a valid PNG (200) showing
 the error message and timestamp — the Kindle never sees a 500.
@@ -171,8 +169,9 @@ app/
 │   ├── editor.py       /editor + /api/dashboards/...
 │   └── render.py       /dash/<name>.png + /preview/<name>
 ├── widgets/            one module per widget type
-├── templates/          Jinja templates (dashboard, editor, widget partials)
-└── static/             gridstack.js + editor.js
+├── templates/          Jinja templates (dashboard, zoom, editor, widget partials;
+│                       _widgets.css holds the widget styles shared by dashboard + zoom)
+└── static/             gridstack.js + editor.js/.css + fonts + icons
 config/
 ├── dashboards/         per-dashboard JSON
 ├── secrets.json        local-only, gitignored

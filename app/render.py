@@ -1,15 +1,10 @@
-"""HTML -> PNG -> grayscale render pipeline.
-
-Note on PNG output:
-  WeasyPrint removed ``HTML.write_png`` in v53; v60+ supports only PDF
-  output. The plan's literal ``HTML(string=html).write_png(...)`` therefore
-  cannot run against the installed WeasyPrint 68.x. As a minimal,
-  Playwright-free workaround we render the dashboard to PDF via WeasyPrint
-  and rasterize the first page to PNG with pypdfium2 (pure-Python wheel,
-  no external system dependencies beyond what WeasyPrint already needs).
-"""
+"""Dashboard render pipeline: widget fetch -> Jinja HTML -> WeasyPrint PDF ->
+pypdfium2 raster -> grayscale PNG. (WeasyPrint 53+ has no PNG output, hence
+the PDF hop.)"""
 import asyncio
 import io
+import json
+import time
 from pathlib import Path
 from typing import Any
 
@@ -20,167 +15,110 @@ from weasyprint import HTML
 
 from app import theme as theme_mod
 from app.widgets import get_widget
+from app.zones import BACK_STRIP_HEIGHT
 
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 STATIC_DIR = Path(__file__).parent / "static"
 _FONTS_BASE_URL = (STATIC_DIR / "fonts").resolve().as_uri()
+ZOOM_FACTOR = 2.5  # widget font scale in the full-screen zoom view
 _env = Environment(
     loader=FileSystemLoader(TEMPLATES_DIR),
     autoescape=select_autoescape(["html"]),
     enable_async=True,
 )
 
+# ponytail: unbounded, but keyed by widget config so it holds one entry per
+# configured widget; add eviction if configs churn a lot.
+_cache: dict[tuple[str, str], tuple[float, dict[str, Any]]] = {}
 
-def _resolve_theme(dashboard: dict[str, Any] | None) -> dict[str, Any]:
-    raw = (dashboard or {}).get("theme") if dashboard else None
-    return theme_mod.resolve(raw, fonts_base=_FONTS_BASE_URL)
+
+def _resolve_theme(dashboard: dict[str, Any]) -> dict[str, Any]:
+    return theme_mod.resolve(dashboard.get("theme"), fonts_base=_FONTS_BASE_URL)
 
 
-async def _fetch_item(widget_cfg: dict[str, Any]) -> dict[str, Any]:
+async def _fetch_ctx(widget_cfg: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    """Return (template, ctx) for a widget, reusing a fresh cached ctx. Raises on failure."""
+    widget = get_widget(widget_cfg["type"])
+    cfg = widget_cfg.get("config", {})
+    ttl = getattr(widget, "cache_ttl", 0)
+    key = (widget_cfg["type"], json.dumps(cfg, sort_keys=True))
+    hit = _cache.get(key)
+    if ttl and hit and hit[0] > time.monotonic():
+        return widget.template, hit[1]
+    ctx = await widget.fetch(cfg)
+    if ttl:
+        _cache[key] = (time.monotonic() + ttl, ctx)
+    return widget.template, ctx
+
+
+async def _render_body(widget_cfg: dict[str, Any]) -> tuple[str, str | None]:
+    """Return (body_html, error). Errors are per-widget so one bad widget never
+    breaks the whole dashboard."""
     try:
-        widget = get_widget(widget_cfg["type"])
-        ctx = await widget.fetch(widget_cfg.get("config", {}))
-        return {
-            "pos": widget_cfg["pos"],
-            "template": widget.template,
-            "ctx": ctx,
-            "error": None,
-        }
+        template, ctx = await _fetch_ctx(widget_cfg)
+        return await _env.get_template(template).render_async(**ctx), None
     except Exception as exc:  # noqa: BLE001
-        return {
-            "pos": widget_cfg["pos"],
-            "template": None,
-            "ctx": {},
-            "error": str(exc) or type(exc).__name__,
-        }
-
-
-async def render_widget_html(
-    widget_cfg: dict[str, Any],
-    dashboard: dict[str, Any] | None = None,
-) -> str:
-    """Render one widget to standalone HTML (with dashboard styles) for previewing in the editor."""
-    item = await _fetch_item(widget_cfg)
-    body_html = ""
-    if not item["error"]:
-        widget_tpl = _env.get_template(item["template"])
-        body_html = await widget_tpl.render_async(**item["ctx"])
-    template = _env.get_template("widget_preview.html")
-    return await template.render_async(
-        body=body_html,
-        error=item["error"],
-        widget_type=widget_cfg["type"],
-        theme=_resolve_theme(dashboard),
-    )
+        return "", str(exc) or type(exc).__name__
 
 
 async def render_dashboard_html(dashboard: dict[str, Any]) -> str:
-    items = await asyncio.gather(*[_fetch_item(w) for w in dashboard["widgets"]])
-    rendered_items = []
-    for item in items:
-        if item["error"] is None and item["template"]:
-            widget_tpl = _env.get_template(item["template"])
-            body_html = await widget_tpl.render_async(**item["ctx"])
-        else:
-            body_html = ""
-        rendered_items.append({
-            "pos": item["pos"],
-            "error": item["error"],
-            "body": body_html,
-        })
-    template = _env.get_template("dashboard.html")
-    return await template.render_async(
+    bodies = await asyncio.gather(*[_render_body(w) for w in dashboard["widgets"]])
+    items = [
+        {"pos": w["pos"], "body": body, "error": error}
+        for w, (body, error) in zip(dashboard["widgets"], bodies)
+    ]
+    return await _env.get_template("dashboard.html").render_async(
         width=dashboard["size"]["w"],
         height=dashboard["size"]["h"],
         cols=dashboard["grid"]["cols"],
         rows=dashboard["grid"]["rows"],
-        items=rendered_items,
+        items=items,
         theme=_resolve_theme(dashboard),
     )
 
 
-def _html_to_png_bytes(html: str, width: int, height: int) -> bytes:
-    # WeasyPrint 60+ has no write_png; render to PDF then rasterize.
-    pdf_bytes = HTML(string=html).write_pdf()
-    pdf = pdfium.PdfDocument(pdf_bytes)
-    page = pdf[0]
-    # WeasyPrint's @page sized in CSS px lays out at 96 CSS px per inch.
-    # PDF units are points (1/72 inch). pypdfium2 default render scale is 1.0
-    # (= 72 DPI). Scale 96/72 yields exactly the requested CSS pixel size.
-    pil = page.render(scale=96 / 72).to_pil().convert("RGBA")
-    if pil.size != (width, height):
-        pil = pil.resize((width, height), Image.Resampling.LANCZOS)
-    buf = io.BytesIO()
-    pil.save(buf, format="PNG")
-    return buf.getvalue()
+async def render_zoom_html(dashboard: dict[str, Any], widget_id: str) -> str:
+    widget_cfg = next((w for w in dashboard["widgets"] if w["id"] == widget_id), None)
+    if widget_cfg is None:
+        raise KeyError(f"widget {widget_id!r} not in dashboard {dashboard['name']!r}")
+    body, error = await _render_body(widget_cfg)
+    height = dashboard["size"]["h"]
+    return await _env.get_template("zoom.html").render_async(
+        width=dashboard["size"]["w"],
+        height=height,
+        body_h=height - BACK_STRIP_HEIGHT,
+        strip_h=BACK_STRIP_HEIGHT,
+        body=body,
+        error=error,
+        zoom_factor=ZOOM_FACTOR,
+        theme=_resolve_theme(dashboard),
+    )
 
 
-def _to_grayscale(png_bytes: bytes, dither: str) -> bytes:
-    img = Image.open(io.BytesIO(png_bytes)).convert("L")
+def _html_to_gray_png(html: str, width: int, height: int, dither: str) -> bytes:
+    pdf = pdfium.PdfDocument(HTML(string=html).write_pdf())
+    # WeasyPrint lays out at 96 CSS px/inch; PDF points are 1/72 inch.
+    img = pdf[0].render(scale=96 / 72).to_pil().convert("L")
+    if img.size != (width, height):
+        img = img.resize((width, height), Image.Resampling.LANCZOS)
     if dither == "fs":
-        img = img.convert("1", dither=Image.Dither.FLOYDSTEINBERG)
-        img = img.convert("L")
+        img = img.convert("1", dither=Image.Dither.FLOYDSTEINBERG).convert("L")
     buf = io.BytesIO()
     img.save(buf, format="PNG", optimize=True)
     return buf.getvalue()
 
 
-async def render_dashboard_png(dashboard: dict[str, Any]) -> bytes:
-    html = await render_dashboard_html(dashboard)
-    width = dashboard["size"]["w"]
-    height = dashboard["size"]["h"]
-    rgba_png = await asyncio.to_thread(_html_to_png_bytes, html, width, height)
-    dither = dashboard.get("dither", "fs")
-    return await asyncio.to_thread(_to_grayscale, rgba_png, dither)
-
-
-ZOOM_BACK_STRIP_PX = 80
-
-
-def _find_widget_cfg(dashboard: dict[str, Any], widget_id: str) -> dict[str, Any]:
-    for w in dashboard["widgets"]:
-        if w["id"] == widget_id:
-            return w
-    raise KeyError(f"widget {widget_id!r} not in dashboard {dashboard['name']!r}")
-
-
-async def _fetch_zoom_body(widget_cfg: dict[str, Any]) -> tuple[str, str | None]:
-    """Returns (body_html, error). On error, body_html is ''."""
-    try:
-        widget = get_widget(widget_cfg["type"])
-        fetch_detail = getattr(widget, "fetch_detail", widget.fetch)
-        template_name = getattr(widget, "detail_template", None) or widget.template
-        ctx = await fetch_detail(widget_cfg.get("config", {}))
-        tpl = _env.get_template(template_name)
-        body = await tpl.render_async(**ctx)
-        return body, None
-    except Exception as exc:  # noqa: BLE001
-        return "", str(exc) or type(exc).__name__
-
-
-async def render_zoom_html(dashboard: dict[str, Any], widget_id: str) -> str:
-    widget_cfg = _find_widget_cfg(dashboard, widget_id)
-    body, error = await _fetch_zoom_body(widget_cfg)
-    if error is not None:
-        body = f'<div class="widget widget-error">&#9888; {error}</div>'
-    width = dashboard["size"]["w"]
-    height = dashboard["size"]["h"]
-    template = _env.get_template("zoom.html")
-    return await template.render_async(
-        width=width,
-        height=height,
-        body_h=height - ZOOM_BACK_STRIP_PX,
-        strip_h=ZOOM_BACK_STRIP_PX,
-        body=body,
-        theme=_resolve_theme(dashboard),
+async def _to_png(dashboard: dict[str, Any], html: str) -> bytes:
+    return await asyncio.to_thread(
+        _html_to_gray_png, html,
+        dashboard["size"]["w"], dashboard["size"]["h"], dashboard.get("dither", "fs"),
     )
 
 
+async def render_dashboard_png(dashboard: dict[str, Any]) -> bytes:
+    return await _to_png(dashboard, await render_dashboard_html(dashboard))
+
+
 async def render_zoom_png(dashboard: dict[str, Any], widget_id: str) -> bytes:
-    html = await render_zoom_html(dashboard, widget_id)
-    width = dashboard["size"]["w"]
-    height = dashboard["size"]["h"]
-    rgba_png = await asyncio.to_thread(_html_to_png_bytes, html, width, height)
-    dither = dashboard.get("dither", "fs")
-    return await asyncio.to_thread(_to_grayscale, rgba_png, dither)
+    return await _to_png(dashboard, await render_zoom_html(dashboard, widget_id))

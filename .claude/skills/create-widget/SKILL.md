@@ -11,7 +11,7 @@ Add a new widget type to the Kindle dashboard. Each widget consists of:
 2. A Jinja partial at `app/templates/widgets/<name>.html`
 3. A test file at `tests/widgets/test_<name>.py`
 4. Registration in `app/widgets/__init__.py`
-5. CSS (added to `app/templates/dashboard.html`)
+5. CSS (added to `app/templates/_widgets.css`)
 
 ## Gather Requirements
 
@@ -29,11 +29,11 @@ Ask the user, one at a time:
 - **Async first.** `fetch()` is `async`. Use `httpx.AsyncClient` for HTTP. If the data library is sync-only (like `caldav`), wrap with `asyncio.to_thread(...)`.
 - **No JavaScript runs in the rendered widget HTML.** WeasyPrint doesn't execute JS. Inline images via data URIs if needed.
 - **Errors → `WidgetError`.** Any failure to fetch data must raise `WidgetError`. The renderer turns this into a per-cell error box.
-- **Secrets resolution.** If the widget takes a credential, add `secrets: SecretsStore | None = None` to `__init__`, call `self.secrets.resolve(cfg["password"])`, and update `_NEEDS_SECRETS` in `app/widgets/__init__.py`.
+- **Secrets resolution.** If the widget takes a credential, add `secrets: SecretsStore | None = None` to `__init__`, call `self.secrets.resolve(cfg["password"])`, and update `_NEEDS_SECRETS` in `app/widgets/__init__.py`. Mark credential fields `"format": "password"` in `config_schema` so the editor masks them.
 - **No `print()` or logging.info in fetch.** Errors are signaled by exceptions.
 - **Tests use respx for HTTP mocking** or `unittest.mock` for non-HTTP. Never make real network calls in tests.
 - **No state outside `fetch()`.** Widget instances may be reused; don't store fetched data on `self`.
-- **CSS scoping.** Add CSS rules under `.widget-<name>` to `app/templates/dashboard.html`. Don't ship a separate stylesheet.
+- **CSS scoping.** Add CSS rules under `.widget-<name>` to `app/templates/_widgets.css` (shared by the dashboard and the zoom view). Size fonts as `calc(<px> * var(--font-scale))` so the zoom view scales them.
 
 ## Templates
 
@@ -50,6 +50,7 @@ from app.widgets.base import WidgetError
 class <ClassName>Widget:
     type = "<name>"
     template = "widgets/<name>.html"
+    cache_ttl = 60  # seconds to reuse fetched data; 0 for live values like clocks
     config_schema = {
         "type": "object",
         "required": [<required-fields-as-strings>],
@@ -86,6 +87,7 @@ from app.widgets.base import WidgetError
 class <ClassName>Widget:
     type = "<name>"
     template = "widgets/<name>.html"
+    cache_ttl = 60  # seconds to reuse fetched data; 0 for live values like clocks
     config_schema = {
         "type": "object",
         "required": [...],
@@ -156,9 +158,9 @@ def test_<name>_metadata() -> None:
 
 Add an import and entry to `REGISTRY`. If the widget needs secrets, also add its `type` to `_NEEDS_SECRETS`. Read the current file before editing — match the existing pattern exactly.
 
-### CSS in `app/templates/dashboard.html`
+### CSS in `app/templates/_widgets.css`
 
-Add styles under the `.widget-<name>` selector inside the `<style>` block of `dashboard.html`. Keep rules simple — WeasyPrint supports most modern CSS but not all (no flexbox `gap` quirks; modern grid works fine).
+Add styles under the `.widget-<name>` selector in `_widgets.css`. It is included by both `dashboard.html` and `zoom.html`; zoom multiplies `--font-scale` by 2.5. Keep rules simple — WeasyPrint supports most modern CSS but not all (no flexbox `gap` quirks; modern grid works fine).
 
 ## Workflow
 
@@ -168,7 +170,7 @@ Add styles under the `.widget-<name>` selector inside the `<style>` block of `da
 4. Create the Jinja partial.
 5. Create the test file.
 6. Update `app/widgets/__init__.py` with the new entry (and `_NEEDS_SECRETS` if applicable).
-7. Add CSS rules under `.widget-<name>` to `app/templates/dashboard.html`.
+7. Add CSS rules under `.widget-<name>` to `app/templates/_widgets.css`.
 8. Run `.venv/bin/pytest tests/widgets/test_<name>.py -v`. All tests must pass.
 9. Run the full suite: `.venv/bin/pytest -v`. Confirm nothing else broke.
 10. Commit with message `feat: <name> widget`.

@@ -10,6 +10,7 @@ from app.widgets.base import WidgetError
 class GrafanaPanelWidget:
     type = "grafana"
     template = "widgets/grafana.html"
+    cache_ttl = 120
     config_schema = {
         "type": "object",
         "required": ["base_url", "dashboard_uid", "dashboard_slug", "panel_id"],
@@ -21,7 +22,7 @@ class GrafanaPanelWidget:
             "panel_id": {"type": "integer", "title": "Panel ID"},
             "width": {"type": "integer", "title": "Width (px)", "default": 500},
             "height": {"type": "integer", "title": "Height (px)", "default": 300},
-            "token": {"type": "string", "title": "API token (use $name for secrets)",
+            "token": {"type": "string", "title": "API token", "format": "password",
                       "default": "$grafana_token"},
         },
     }

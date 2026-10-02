@@ -20,15 +20,26 @@ ALL_DAY_LABELS = {
 }
 
 
+def _sort_key(start: date | datetime) -> datetime:
+    """Comparable UTC instant: all-day dates count as local midnight, naive
+    datetimes as local time, aware ones are converted."""
+    if not isinstance(start, datetime):
+        start = datetime(start.year, start.month, start.day)
+    if start.tzinfo is None:
+        start = start.astimezone()  # interpret naive as local
+    return start.astimezone(timezone.utc)
+
+
 class ICloudCalendarWidget:
     type = "calendar"
     template = "widgets/calendar.html"
+    cache_ttl = 300
     config_schema = {
         "type": "object",
         "required": ["username", "password", "calendar_name"],
         "properties": {
             "username": {"type": "string", "title": "iCloud username (email)"},
-            "password": {"type": "string", "title": "App-specific password (use $name for secrets)",
+            "password": {"type": "string", "title": "App-specific password", "format": "password",
                          "default": "$icloud_app_password"},
             "calendar_name": {"type": "string", "title": "Calendar name"},
             "max_events": {"type": "integer", "title": "Max events", "default": 5, "minimum": 1, "maximum": 20},
@@ -104,12 +115,13 @@ class ICloudCalendarWidget:
 
     def _fetch_sync(self, cfg: dict[str, Any]) -> dict[str, Any]:
         try:
-            password = self.secrets.resolve(cfg["password"]) if self.secrets else cfg["password"]
+            resolve = self.secrets.resolve if self.secrets else (lambda v: v)
+            username, password = resolve(cfg["username"]), resolve(cfg["password"])
         except MissingSecret as exc:
             raise WidgetError(f"missing secret: {exc}") from exc
 
         try:
-            client = caldav.DAVClient(url=ICLOUD_URL, username=cfg["username"], password=password)
+            client = caldav.DAVClient(url=ICLOUD_URL, username=username, password=password)
             principal = client.principal()
             calendar = principal.calendar(name=cfg["calendar_name"])
         except (caldav.lib.error.AuthorizationError, ConnectionError, OSError) as exc:
@@ -137,7 +149,7 @@ class ICloudCalendarWidget:
                     **self._format_event_start(start, date_time_format),
                     "sort": start,
                 })
-        parsed.sort(key=lambda e: e["sort"].isoformat() if isinstance(e["sort"], datetime) else str(e["sort"]))
+        parsed.sort(key=lambda e: _sort_key(e["sort"]))
         for e in parsed:
             e.pop("sort")
         return {"events": parsed[:max_events]}

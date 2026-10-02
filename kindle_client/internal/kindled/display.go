@@ -50,11 +50,15 @@ func to8BitGrayscalePNG(src []byte) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("decode png: %w", err)
 	}
-	bounds := img.Bounds()
-	gray := image.NewGray(bounds)
-	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
-		for x := bounds.Min.X; x < bounds.Max.X; x++ {
-			gray.Set(x, y, color.GrayModel.Convert(img.At(x, y)))
+	// The server already sends 8-bit gray; only convert other inputs pixel by pixel.
+	gray, ok := img.(*image.Gray)
+	if !ok {
+		bounds := img.Bounds()
+		gray = image.NewGray(bounds)
+		for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+			for x := bounds.Min.X; x < bounds.Max.X; x++ {
+				gray.Set(x, y, color.GrayModel.Convert(img.At(x, y)))
+			}
 		}
 	}
 	buf := &bytes.Buffer{}

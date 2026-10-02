@@ -6,8 +6,6 @@ from fastapi.testclient import TestClient
 from app.config_store import ConfigStore
 from app.deps import get_config_store
 from app.main import app
-from app.widgets import REGISTRY
-from app.widgets.base import WidgetError
 
 
 @pytest.fixture
@@ -101,7 +99,7 @@ def test_widget_config_form_renders_enum_select(client) -> None:
     resp = c.get("/api/dashboards/demo/widgets/w1/config-form")
 
     assert resp.status_code == 200
-    assert 'name="config[date_time_format]"' in resp.text
+    assert 'name="date_time_format"' in resp.text
     assert '<option value="german">German</option>' in resp.text
 
 
@@ -140,91 +138,11 @@ def test_editor_unknown_name_falls_back_to_first(client) -> None:
     assert 'value="a" selected' in resp.text
 
 
-def test_widget_preview_renders_html(client) -> None:
-    c, store = client
-    store.save("demo", {"name": "demo", "size": {"w": 758, "h": 1024},
-                        "grid": {"cols": 12, "rows": 16}, "dither": "fs",
-                        "widgets": [{"id": "w1", "type": "clock",
-                                     "pos": {"x": 0, "y": 0, "w": 6, "h": 4},
-                                     "config": {"format": "HH:mm"}}]})
-    resp = c.get("/api/dashboards/demo/widgets/w1/preview")
-    assert resp.status_code == 200
-    assert resp.headers["content-type"].startswith("text/html")
-    # Should contain rendered clock-time element
-    assert "clock-time" in resp.text
 
 
-def test_widget_preview_shows_full_error_message(client, monkeypatch) -> None:
-    c, store = client
-    message = "missing token\nset grafana_token in config/secrets.json\nthen refresh the preview"
-
-    class BrokenPreviewWidget:
-        type = "broken-preview"
-        template = "widgets/clock.html"
-        config_schema = {}
-
-        async def fetch(self, cfg: dict) -> dict:
-            raise WidgetError(message)
-
-    monkeypatch.setitem(REGISTRY, BrokenPreviewWidget.type, BrokenPreviewWidget)
-    store.save("demo", {"name": "demo", "size": {"w": 758, "h": 1024},
-                        "grid": {"cols": 12, "rows": 16}, "dither": "fs",
-                        "widgets": [{"id": "w1", "type": "broken-preview",
-                                     "pos": {"x": 0, "y": 0, "w": 6, "h": 4},
-                                     "config": {}}]})
-
-    resp = c.get("/api/dashboards/demo/widgets/w1/preview")
-
-    assert resp.status_code == 200
-    assert resp.headers["content-type"].startswith("text/html")
-    assert message in resp.text
-    assert "white-space: pre-wrap" in resp.text
-    assert "overflow-wrap: anywhere" in resp.text
 
 
-def test_widget_preview_unknown_widget_returns_404(client) -> None:
-    c, store = client
-    store.save("demo", {"name": "demo", "size": {"w": 758, "h": 1024},
-                        "grid": {"cols": 12, "rows": 16}, "dither": "fs",
-                        "widgets": []})
-    resp = c.get("/api/dashboards/demo/widgets/nope/preview")
-    assert resp.status_code == 404
 
-
-def test_widget_preview_unknown_dashboard_returns_404(client) -> None:
-    c, store = client
-    resp = c.get("/api/dashboards/nodash/widgets/w1/preview")
-    assert resp.status_code == 404
-
-
-def test_delete_widget_removes_from_dashboard(client) -> None:
-    c, store = client
-    store.save("demo", {
-        "name": "demo", "size": {"w": 758, "h": 1024},
-        "grid": {"cols": 12, "rows": 16}, "dither": "fs",
-        "widgets": [
-            {"id": "w1", "type": "clock", "pos": {"x": 0, "y": 0, "w": 6, "h": 3}, "config": {}},
-            {"id": "w2", "type": "clock", "pos": {"x": 6, "y": 0, "w": 6, "h": 3}, "config": {}},
-        ],
-    })
-    resp = c.delete("/api/dashboards/demo/widgets/w1")
-    assert resp.status_code == 200
-    remaining = [w["id"] for w in store.load("demo")["widgets"]]
-    assert remaining == ["w2"]
-
-
-def test_delete_widget_unknown_widget_returns_404(client) -> None:
-    c, store = client
-    store.save("demo", {"name": "demo", "size": {"w": 758, "h": 1024},
-                        "grid": {"cols": 12, "rows": 16}, "dither": "fs", "widgets": []})
-    resp = c.delete("/api/dashboards/demo/widgets/nope")
-    assert resp.status_code == 404
-
-
-def test_delete_widget_unknown_dashboard_returns_404(client) -> None:
-    c, _store = client
-    resp = c.delete("/api/dashboards/nodash/widgets/w1")
-    assert resp.status_code == 404
 
 
 def test_patch_theme_sets_preset(client) -> None:
@@ -271,10 +189,60 @@ def test_patch_theme_rejects_invalid_preset(client) -> None:
     assert resp.status_code == 400
 
 
-def test_list_themes_returns_presets_and_options(client) -> None:
-    c, _store = client
-    resp = c.get("/api/themes")
+def _demo(store, widgets=None):
+    store.save("demo", {"name": "demo", "size": {"w": 758, "h": 1024},
+                        "grid": {"cols": 12, "rows": 16}, "dither": "fs",
+                        "widgets": widgets or []})
+
+
+def test_create_existing_dashboard_returns_409(client) -> None:
+    c, store = client
+    _demo(store, [{"id": "w1", "type": "clock", "pos": {"x": 0, "y": 0, "w": 2, "h": 2}, "config": {}}])
+    resp = c.post("/api/dashboards", data={"name": "demo"})
+    assert resp.status_code == 409
+    assert len(store.load("demo")["widgets"]) == 1
+
+
+@pytest.mark.parametrize("payload", [
+    {},
+    {"widgets": "nope"},
+    {"widgets": [{"id": "w1", "type": "clock", "config": {}}]},
+    {"widgets": [{"id": "w1", "type": "clock", "pos": {"x": 10, "y": 0, "w": 4, "h": 2}, "config": {}}]},
+    {"widgets": [{"id": "w1", "type": "clock", "pos": {"x": "0", "y": 0, "w": 4, "h": 2}, "config": {}}]},
+    {"widgets": [{"id": "w1", "type": "clock", "pos": {"x": 0, "y": 0, "w": 2, "h": 2}, "config": {}},
+                 {"id": "w1", "type": "clock", "pos": {"x": 4, "y": 0, "w": 2, "h": 2}, "config": {}}]},
+])
+def test_put_layout_rejects_bad_payload(client, payload) -> None:
+    c, store = client
+    _demo(store)
+    assert c.put("/api/dashboards/demo/layout", json=payload).status_code == 400
+
+
+def test_patch_widget_coerces_form_strings(client) -> None:
+    c, store = client
+    _demo(store, [{"id": "w1", "type": "weather", "pos": {"x": 0, "y": 0, "w": 6, "h": 4}, "config": {}}])
+    resp = c.patch("/api/dashboards/demo/widgets/w1",
+                   json={"config": {"location": "123", "lat": "", "days": "5"}})
     assert resp.status_code == 200
-    data = resp.json()
-    assert {"presets", "fonts", "border_styles", "densities"} <= data.keys()
-    assert any(p["name"] == "editorial" for p in data["presets"])
+    assert store.load("demo")["widgets"][0]["config"] == {"location": "123", "days": 5}
+
+
+def test_patch_widget_rejects_bad_number_and_missing_required(client) -> None:
+    c, store = client
+    _demo(store, [
+        {"id": "w1", "type": "weather", "pos": {"x": 0, "y": 0, "w": 6, "h": 4}, "config": {}},
+        {"id": "w2", "type": "iobroker", "pos": {"x": 6, "y": 0, "w": 6, "h": 4}, "config": {}},
+    ])
+    assert c.patch("/api/dashboards/demo/widgets/w1", json={"config": {"days": "abc"}}).status_code == 400
+    assert c.patch("/api/dashboards/demo/widgets/w2", json={"config": {"label": "x"}}).status_code == 400
+
+
+def test_editor_requires_auth_when_password_set(client, monkeypatch) -> None:
+    c, store = client
+    _demo(store)
+    monkeypatch.setenv("KD_EDITOR_PASSWORD", "s3cret")
+    assert c.get("/editor").status_code == 401
+    assert c.get("/api/dashboards/demo").status_code == 401
+    assert c.get("/api/dashboards/demo", auth=("any", "wrong")).status_code == 401
+    assert c.get("/api/dashboards/demo", auth=("any", "s3cret")).status_code == 200
+

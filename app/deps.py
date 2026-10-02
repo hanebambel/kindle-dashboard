@@ -1,3 +1,9 @@
+import os
+import secrets
+
+from fastapi import Depends, HTTPException
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
+
 from app.config_store import ConfigStore
 from app.state import ViewStateStore
 
@@ -28,3 +34,16 @@ def get_view_state_store() -> ViewStateStore:
     if _view_state is None:
         raise RuntimeError("view state store not configured")
     return _view_state
+
+
+_security = HTTPBasic(auto_error=False)
+
+
+def require_editor_auth(creds: HTTPBasicCredentials | None = Depends(_security)) -> None:
+    """HTTP Basic guard for the editor + JSON API. Password from KD_EDITOR_PASSWORD;
+    unset means open (local dev) — main.py logs a warning at startup."""
+    password = os.environ.get("KD_EDITOR_PASSWORD")
+    if not password:
+        return
+    if creds is None or not secrets.compare_digest(creds.password.encode(), password.encode()):
+        raise HTTPException(status_code=401, headers={"WWW-Authenticate": 'Basic realm="kindledashboard"'})

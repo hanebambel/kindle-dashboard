@@ -8,6 +8,7 @@ from app.widgets.base import WidgetError
 class IobrokerStateWidget:
     type = "iobroker"
     template = "widgets/iobroker.html"
+    cache_ttl = 30
     config_schema = {
         "type": "object",
         "required": ["base_url", "state_id", "label"],

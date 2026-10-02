@@ -20,6 +20,7 @@ dashboard template:
 """
 from __future__ import annotations
 
+import re
 from typing import Any
 
 
@@ -95,6 +96,9 @@ FONT_FACE_CSS_TEMPLATE = """
 VALID_AXIS_KEYS = {"preset", "font_family", "font_scale", "border_style", "density", "custom_font_url"}
 
 
+_SAFE_URL_RE = re.compile(r"https?://[^\s'\"()\\]+")
+
+
 class InvalidTheme(ValueError):
     pass
 
@@ -127,8 +131,11 @@ def validate(theme: dict[str, Any] | None) -> None:
         if not (0.5 <= float(font_scale) <= 2.0):
             raise InvalidTheme("font_scale must be between 0.5 and 2.0")
     custom_font_url = theme.get("custom_font_url")
-    if custom_font_url is not None and not isinstance(custom_font_url, str):
-        raise InvalidTheme("custom_font_url must be a string")
+    if custom_font_url is not None and (
+        not isinstance(custom_font_url, str) or not _SAFE_URL_RE.fullmatch(custom_font_url)
+    ):
+        # Interpolated into CSS @import, so no quotes/parens/whitespace allowed.
+        raise InvalidTheme("custom_font_url must be a plain http(s) URL")
 
 
 def resolve(theme: dict[str, Any] | None, fonts_base: str = "/static/fonts") -> dict[str, Any]:

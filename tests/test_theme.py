@@ -108,3 +108,14 @@ def test_validate_rejects_bad_font_scale(bad) -> None:
 def test_list_presets_includes_all_four() -> None:
     names = [p["name"] for p in theme.list_presets()]
     assert set(names) == {"default", "editorial", "terminal", "soft"}
+
+
+@pytest.mark.parametrize("url", [
+    "https://x.com/a.css');} body{display:none",
+    "file:///etc/passwd",
+    "https://x.com/a b.css",
+    'https://x.com/"a.css',
+])
+def test_validate_rejects_unsafe_custom_font_url(url) -> None:
+    with pytest.raises(theme.InvalidTheme):
+        theme.validate({"custom_font_url": url})

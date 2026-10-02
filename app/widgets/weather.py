@@ -81,6 +81,7 @@ async def _geocode(name: str) -> tuple[float, float]:
 class WeatherWidget:
     type = "weather"
     template = "widgets/weather.html"
+    cache_ttl = 600
     config_schema = {
         "type": "object",
         "properties": {

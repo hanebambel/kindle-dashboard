@@ -5,6 +5,7 @@ from typing import Any
 class ClockWidget:
     type = "clock"
     template = "widgets/clock.html"
+    cache_ttl = 0
     config_schema = {
         "type": "object",
         "properties": {

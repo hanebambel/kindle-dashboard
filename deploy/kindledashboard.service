@@ -8,6 +8,8 @@ Type=simple
 User=pi
 WorkingDirectory=/opt/kindledashboard
 Environment="PATH=/opt/kindledashboard/.venv/bin"
+# KD_EDITOR_PASSWORD=... protects /editor and /api/* (HTTP Basic, any username)
+EnvironmentFile=-/opt/kindledashboard/.env
 ExecStart=/opt/kindledashboard/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8080
 Restart=on-failure
 RestartSec=5

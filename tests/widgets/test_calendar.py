@@ -93,3 +93,13 @@ def test_calendar_metadata() -> None:
     assert widget.type == "calendar"
     assert "username" in widget.config_schema["properties"]
     assert "date_time_format" in widget.config_schema["properties"]
+
+
+def test_sort_key_orders_across_offsets_and_all_day() -> None:
+    from datetime import date
+    from app.widgets.calendar import _sort_key
+
+    berlin_10 = datetime(2026, 5, 20, 10, 0, tzinfo=timezone(timedelta(hours=2)))  # 08:00 UTC
+    utc_09 = datetime(2026, 5, 20, 9, 0, tzinfo=timezone.utc)
+    starts = [utc_09, berlin_10, date(2026, 5, 21)]
+    assert sorted(starts, key=_sort_key) == [berlin_10, utc_09, date(2026, 5, 21)]

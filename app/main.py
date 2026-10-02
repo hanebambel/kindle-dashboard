@@ -1,3 +1,5 @@
+import logging
+import os
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -20,7 +22,10 @@ configure_store(ConfigStore(dashboards_dir=CONFIG_DIR / "dashboards"))
 configure_view_state_store(ViewStateStore())
 widgets.configure(SecretsStore(path=CONFIG_DIR / "secrets.json"))
 
-STATIC_DIR.mkdir(exist_ok=True)
+if not os.environ.get("KD_EDITOR_PASSWORD"):
+    logging.getLogger(__name__).warning(
+        "KD_EDITOR_PASSWORD not set: /editor and /api are open to anyone on the network"
+    )
 
 app = FastAPI(title="kindledashboard")
 app.include_router(render_routes.router)

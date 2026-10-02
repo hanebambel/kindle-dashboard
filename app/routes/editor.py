@@ -8,12 +8,12 @@ from starlette.requests import Request
 
 from app import theme as theme_mod
 from app.config_store import ConfigStore, DashboardNotFound, InvalidDashboard
-from app.deps import get_config_store
-from app.render import render_widget_html
+from app.deps import get_config_store, require_editor_auth
 from app.widgets import REGISTRY, get_widget
+from app.widgets.base import coerce_config
 
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_editor_auth)])
 templates = Jinja2Templates(directory=str(Path(__file__).parent.parent / "templates"))
 
 
@@ -25,6 +25,27 @@ def _default_dashboard(name: str) -> dict:
         "dither": "fs",
         "widgets": [],
     }
+
+
+def _load_or_404(store: ConfigStore, name: str) -> dict[str, Any]:
+    try:
+        return store.load(name)
+    except (DashboardNotFound, InvalidDashboard):
+        raise HTTPException(status_code=404, detail=f"dashboard {name!r} not found")
+
+
+def _widget_or_404(dash: dict[str, Any], wid: str) -> dict[str, Any]:
+    for w in dash["widgets"]:
+        if w["id"] == wid:
+            return w
+    raise HTTPException(status_code=404, detail=f"widget {wid!r} not found")
+
+
+def _save_or_400(store: ConfigStore, name: str, dash: dict[str, Any]) -> None:
+    try:
+        store.save(name, dash)
+    except InvalidDashboard as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 @router.get("/editor", response_class=HTMLResponse)
@@ -50,25 +71,15 @@ def editor_index(
     )
 
 
-@router.get("/api/themes")
-def list_themes() -> dict:
-    return {
-        "presets": theme_mod.list_presets(),
-        "fonts": theme_mod.list_font_families(),
-        "border_styles": theme_mod.list_border_styles(),
-        "densities": theme_mod.list_densities(),
-    }
-
-
 @router.post("/api/dashboards")
 def create_dashboard(
     name: str = Form(...),
     store: ConfigStore = Depends(get_config_store),
 ) -> dict:
-    try:
-        store.save(name, _default_dashboard(name))
-    except InvalidDashboard as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+    name = name.strip()
+    if name in store.list():
+        raise HTTPException(status_code=409, detail=f"dashboard {name!r} already exists")
+    _save_or_400(store, name, _default_dashboard(name))
     return {"name": name}
 
 
@@ -76,17 +87,14 @@ def create_dashboard(
 def delete_dashboard(name: str, store: ConfigStore = Depends(get_config_store)) -> dict:
     try:
         store.delete(name)
-    except DashboardNotFound:
+    except (DashboardNotFound, InvalidDashboard):
         raise HTTPException(status_code=404)
     return {"deleted": name}
 
 
 @router.get("/api/dashboards/{name}")
 def get_dashboard(name: str, store: ConfigStore = Depends(get_config_store)) -> JSONResponse:
-    try:
-        return JSONResponse(store.load(name))
-    except DashboardNotFound:
-        raise HTTPException(status_code=404)
+    return JSONResponse(_load_or_404(store, name))
 
 
 @router.put("/api/dashboards/{name}/layout")
@@ -95,15 +103,11 @@ def put_layout(
     payload: dict[str, Any] = Body(...),
     store: ConfigStore = Depends(get_config_store),
 ) -> dict:
-    try:
-        dash = store.load(name)
-    except DashboardNotFound:
-        raise HTTPException(status_code=404)
+    dash = _load_or_404(store, name)
+    if not isinstance(payload.get("widgets"), list):
+        raise HTTPException(status_code=400, detail="widgets must be a list")
     dash["widgets"] = payload["widgets"]
-    try:
-        store.save(name, dash)
-    except InvalidDashboard as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+    _save_or_400(store, name, dash)
     return {"saved": True}
 
 
@@ -114,37 +118,16 @@ def widget_config_form(
     request: Request,
     store: ConfigStore = Depends(get_config_store),
 ) -> HTMLResponse:
-    try:
-        dash = store.load(name)
-    except DashboardNotFound:
-        raise HTTPException(status_code=404)
-    widget_cfg = next((w for w in dash["widgets"] if w["id"] == wid), None)
-    if widget_cfg is None:
-        raise HTTPException(status_code=404)
-    schema = get_widget(widget_cfg["type"]).config_schema
+    widget_cfg = _widget_or_404(_load_or_404(store, name), wid)
     return templates.TemplateResponse(
         request,
         "_widget_form.html",
         {
             "dashboard": name,
             "widget": widget_cfg,
-            "schema": schema,
+            "schema": get_widget(widget_cfg["type"]).config_schema,
         },
     )
-
-
-@router.get("/api/dashboards/{name}/widgets/{wid}/preview", response_class=HTMLResponse)
-async def widget_preview(name: str, wid: str,
-                         store: ConfigStore = Depends(get_config_store)) -> HTMLResponse:
-    try:
-        dash = store.load(name)
-    except DashboardNotFound:
-        raise HTTPException(status_code=404)
-    widget_cfg = next((w for w in dash["widgets"] if w["id"] == wid), None)
-    if widget_cfg is None:
-        raise HTTPException(status_code=404)
-    html = await render_widget_html(widget_cfg, dashboard=dash)
-    return HTMLResponse(content=html)
 
 
 @router.patch("/api/dashboards/{name}/widgets/{wid}")
@@ -154,43 +137,18 @@ def patch_widget(
     payload: dict[str, Any] = Body(...),
     store: ConfigStore = Depends(get_config_store),
 ) -> dict:
-    try:
-        dash = store.load(name)
-    except DashboardNotFound:
-        raise HTTPException(status_code=404)
-    for w in dash["widgets"]:
-        if w["id"] == wid:
-            if "config" in payload:
-                w["config"] = payload["config"]
-            break
-    else:
-        raise HTTPException(status_code=404)
-    try:
-        store.save(name, dash)
-    except InvalidDashboard as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-    return {"saved": True}
+    dash = _load_or_404(store, name)
+    w = _widget_or_404(dash, wid)
+    if "config" in payload:
+        if not isinstance(payload["config"], dict):
+            raise HTTPException(status_code=400, detail="config must be an object")
+        try:
+            w["config"] = coerce_config(get_widget(w["type"]).config_schema, payload["config"])
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+    _save_or_400(store, name, dash)
+    return {"saved": True, "config": w["config"]}
 
-
-@router.delete("/api/dashboards/{name}/widgets/{wid}")
-def delete_widget(
-    name: str,
-    wid: str,
-    store: ConfigStore = Depends(get_config_store),
-) -> dict:
-    try:
-        dash = store.load(name)
-    except DashboardNotFound:
-        raise HTTPException(status_code=404)
-    before = len(dash["widgets"])
-    dash["widgets"] = [w for w in dash["widgets"] if w["id"] != wid]
-    if len(dash["widgets"]) == before:
-        raise HTTPException(status_code=404)
-    try:
-        store.save(name, dash)
-    except InvalidDashboard as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-    return {"deleted": wid}
 
 
 @router.patch("/api/dashboards/{name}/theme")
@@ -199,18 +157,9 @@ def patch_theme(
     payload: dict[str, Any] = Body(...),
     store: ConfigStore = Depends(get_config_store),
 ) -> dict:
-    try:
-        dash = store.load(name)
-    except DashboardNotFound:
-        raise HTTPException(status_code=404)
-    # Merge payload into existing theme; allow nulls to clear overrides.
-    current = dash.get("theme") or {}
-    merged = {**current, **payload}
-    # Drop keys explicitly set to None so resolver inherits from preset.
-    merged = {k: v for k, v in merged.items() if v is not None}
+    dash = _load_or_404(store, name)
+    # Merge into the existing theme; null clears an override so the preset applies.
+    merged = {k: v for k, v in {**(dash.get("theme") or {}), **payload}.items() if v is not None}
     dash["theme"] = merged
-    try:
-        store.save(name, dash)
-    except InvalidDashboard as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+    _save_or_400(store, name, dash)
     return {"saved": True, "theme": merged}

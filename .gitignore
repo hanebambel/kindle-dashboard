@@ -9,4 +9,3 @@ config/dashboards/*.json
 *.tmp
 .DS_Store
 kindle_client/build/
-config/dashboards/example.json
