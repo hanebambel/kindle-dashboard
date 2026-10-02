@@ -134,3 +134,15 @@ async def test_widget_ctx_cached_within_ttl(monkeypatch) -> None:
     await render_dashboard_html(dash)
     await render_dashboard_html(dash)
     assert len(calls) == 1
+
+
+def test_gray16_snaps_to_sixteen_kindle_levels() -> None:
+    from app.render import _html_to_gray_png
+    html = ('<html><body style="margin:0;background:linear-gradient(90deg,#000,#fff);'
+            'width:758px;height:1024px"></body></html>')
+    png = _html_to_gray_png(html, 758, 1024, "gray16")
+    levels = {c for _, c in Image.open(io.BytesIO(png)).getcolors()}
+    assert levels <= {i * 17 for i in range(16)}
+    assert len(levels) > 8  # a gradient really uses the intermediate greys
+    white = _html_to_gray_png('<html><body style="margin:0"></body></html>', 758, 1024, "gray16")
+    assert Image.open(io.BytesIO(white)).getcolors() == [(758 * 1024, 255)]

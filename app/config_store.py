@@ -18,6 +18,7 @@ class InvalidDashboard(Exception):
 
 REQUIRED_TOP_LEVEL = {"name", "size", "grid", "widgets"}
 REQUIRED_WIDGET = {"id", "type", "pos", "config"}
+DITHER_MODES = {"fs", "gray16", "none"}
 _NAME_RE = re.compile(r"[\w-]{1,64}")
 
 
@@ -62,6 +63,8 @@ class ConfigStore:
             raise InvalidDashboard(f"missing fields: {sorted(missing)}")
         if not isinstance(data["widgets"], list):
             raise InvalidDashboard("widgets must be a list")
+        if data.get("dither", "fs") not in DITHER_MODES:
+            raise InvalidDashboard(f"dither must be one of {sorted(DITHER_MODES)}")
         cols, rows = data["grid"]["cols"], data["grid"]["rows"]
         seen: set[str] = set()
         for w in data["widgets"]:

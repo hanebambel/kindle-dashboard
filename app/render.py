@@ -96,6 +96,10 @@ async def render_zoom_html(dashboard: dict[str, Any], widget_id: str) -> str:
     )
 
 
+_GRAY16 = Image.new("P", (1, 1))
+_GRAY16.putpalette([v for i in range(16) for v in (i * 17,) * 3])
+
+
 def _html_to_gray_png(html: str, width: int, height: int, dither: str) -> bytes:
     pdf = pdfium.PdfDocument(HTML(string=html).write_pdf())
     # WeasyPrint lays out at 96 CSS px/inch; PDF points are 1/72 inch.
@@ -104,6 +108,10 @@ def _html_to_gray_png(html: str, width: int, height: int, dither: str) -> bytes:
         img = img.resize((width, height), Image.Resampling.LANCZOS)
     if dither == "fs":
         img = img.convert("1", dither=Image.Dither.FLOYDSTEINBERG).convert("L")
+    elif dither == "gray16":
+        # Kindle e-ink shows 16 grey levels: snap to 0, 17, 34 … 255 with FS dithering.
+        # quantize() mis-maps "L" input, so go through RGB.
+        img = img.convert("RGB").quantize(palette=_GRAY16, dither=Image.Dither.FLOYDSTEINBERG).convert("L")
     buf = io.BytesIO()
     img.save(buf, format="PNG", optimize=True)
     return buf.getvalue()

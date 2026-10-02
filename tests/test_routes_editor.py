@@ -246,3 +246,13 @@ def test_editor_requires_auth_when_password_set(client, monkeypatch) -> None:
     assert c.get("/api/dashboards/demo", auth=("any", "wrong")).status_code == 401
     assert c.get("/api/dashboards/demo", auth=("any", "s3cret")).status_code == 200
 
+
+
+def test_new_dashboard_defaults_to_gray16_and_dither_is_patchable(client) -> None:
+    c, store = client
+    c.post("/api/dashboards", data={"name": "fresh"})
+    assert store.load("fresh")["dither"] == "gray16"
+    assert c.patch("/api/dashboards/fresh", json={"dither": "fs"}).status_code == 200
+    assert store.load("fresh")["dither"] == "fs"
+    assert c.patch("/api/dashboards/fresh", json={"dither": "sepia"}).status_code == 400
+    assert c.patch("/api/dashboards/fresh", json={"name": "x"}).status_code == 400

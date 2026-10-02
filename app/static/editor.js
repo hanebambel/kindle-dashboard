@@ -241,6 +241,10 @@ function applyTheme(theme) {
   }
 }
 
+function applyDither(value) {
+  for (const b of document.querySelectorAll('#dither button')) b.setAttribute('aria-pressed', String(b.dataset.value === value));
+}
+
 function patchTheme(partial) {
   save(async () => applyTheme((await api('PATCH', '/theme', partial)).theme));
 }
@@ -251,6 +255,10 @@ function initTheme() {
   $('#theme-scale').addEventListener('change', e => {
     const v = e.target.value;
     patchTheme({ font_scale: v === '' ? null : Number(v) });
+  });
+  $('#dither').addEventListener('click', e => {
+    const b = e.target.closest('button');
+    if (b) save(async () => applyDither((await api('PATCH', '', { dither: b.dataset.value })).dither));
   });
   for (const seg of document.querySelectorAll('.seg[data-theme-key]')) {
     seg.addEventListener('click', e => {
@@ -304,6 +312,7 @@ if (NAME) {
   api('GET', '').then((dash) => {
     initGrid(dash);
     applyTheme(dash.theme || {});
+    applyDither(dash.dither || 'fs');
     refreshRender();
   }).catch(err => toast('Could not load dashboard: ' + err.message));
 }

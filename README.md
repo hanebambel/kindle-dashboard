@@ -14,7 +14,8 @@ display the rendered grayscale PNG.
 Designed to run alongside iobroker + Grafana on a Pi 4 (no headless Chromium).
 HTML is rendered to PDF via [WeasyPrint](https://weasyprint.org/), rasterized
 with [pypdfium2](https://github.com/pypdfium2-team/pypdfium2), and
-post-processed by Pillow (grayscale + Floyd–Steinberg dither).
+post-processed by Pillow into the Kindle's 16 grey levels with Floyd–Steinberg
+dithering (per dashboard: `"dither": "gray16"` (default), `"fs"` for pure black/white, or `"none"`).
 
 ## Built-in widgets
 
@@ -134,6 +135,7 @@ Multiple dashboards are supported — just create more (`morning`, `evening`,
 | PUT    | `/api/dashboards/<name>/layout`               | replace the widget list 🔒              |
 | GET    | `/api/dashboards/<name>/widgets/<id>/config-form` | widget settings form (HTML) 🔒      |
 | PATCH  | `/api/dashboards/<name>/widgets/<id>`         | update one widget's config 🔒           |
+| PATCH  | `/api/dashboards/<name>` `{dither}`          | change shading mode 🔒                  |
 | PATCH  | `/api/dashboards/<name>/theme`                | merge theme overrides (`null` clears) 🔒 |
 
 🔒 = requires `KD_EDITOR_PASSWORD` when set.

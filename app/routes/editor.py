@@ -22,7 +22,7 @@ def _default_dashboard(name: str) -> dict:
         "name": name,
         "size": {"w": 758, "h": 1024},
         "grid": {"cols": 12, "rows": 16},
-        "dither": "fs",
+        "dither": "gray16",
         "widgets": [],
     }
 
@@ -95,6 +95,21 @@ def delete_dashboard(name: str, store: ConfigStore = Depends(get_config_store)) 
 @router.get("/api/dashboards/{name}")
 def get_dashboard(name: str, store: ConfigStore = Depends(get_config_store)) -> JSONResponse:
     return JSONResponse(_load_or_404(store, name))
+
+
+@router.patch("/api/dashboards/{name}")
+def patch_dashboard(
+    name: str,
+    payload: dict[str, Any] = Body(...),
+    store: ConfigStore = Depends(get_config_store),
+) -> dict:
+    """Update dashboard-level settings. Only `dither` for now."""
+    dash = _load_or_404(store, name)
+    if set(payload) - {"dither"}:
+        raise HTTPException(status_code=400, detail="only 'dither' can be patched")
+    dash.update(payload)
+    _save_or_400(store, name, dash)
+    return {"saved": True, "dither": dash["dither"]}
 
 
 @router.put("/api/dashboards/{name}/layout")

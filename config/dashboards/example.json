@@ -8,7 +8,7 @@
     "cols": 12,
     "rows": 16
   },
-  "dither": "fs",
+  "dither": "gray16",
   "widgets": [
     {
       "id": "w1",

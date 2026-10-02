@@ -99,6 +99,13 @@
         <label class="field"><span>Font scale</span>
           <input id="theme-scale" type="number" step="0.05" min="0.5" max="2.0" placeholder="From preset">
         </label>
+        <div class="field" role="group" aria-labelledby="lbl-dither"><span id="lbl-dither">Shading</span>
+          <div class="seg" id="dither">
+            <button type="button" data-value="gray16">16 greys</button>
+            <button type="button" data-value="fs">Black/white</button>
+            <button type="button" data-value="none">Smooth</button>
+          </div>
+        </div>
         <div class="field" role="group" aria-labelledby="lbl-border"><span id="lbl-border">Borders</span>
           <div class="seg" data-theme-key="border_style">
             <button type="button" data-value="">auto</button>
