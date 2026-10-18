@@ -110,6 +110,70 @@ image the Kindle gets) behind the grid, and it refreshes after every change.
 Dashboards are plain JSON files under `config/dashboards/`. Editing them by
 hand is also fine.
 
+## Grafana widget setup
+
+The grafana widget fetches a PNG from Grafana's `/render/d-solo/...` endpoint.
+Grafana can't render images by itself. It needs the separate
+**Grafana Image Renderer** service, which runs headless Chromium. Since Grafana 12
+the renderer is no longer offered as a plugin, so run it as a Docker container
+(images exist for amd64 and arm64; on a Pi this needs 64-bit OS, `uname -m` →
+`aarch64`).
+
+1. **Start the renderer.** It listens on 8081 inside the container; map it to any
+   free host port (8083 here):
+   ```
+   curl -fsSL https://get.docker.com | sh      # if Docker isn't installed yet
+   sudo docker run -d --name grafana-renderer --restart unless-stopped \
+     -p 8083:8081 grafana/grafana-image-renderer:latest
+   ```
+
+2. **Point Grafana at it.** In `/etc/grafana/grafana.ini`:
+   ```ini
+   [rendering]
+   server_url = http://localhost:8083/render
+   callback_url = http://172.17.0.1:3000/
+   ```
+   `callback_url` is the address the renderer uses to open Grafana. From inside the
+   container `localhost` is the container itself, so use the Docker bridge
+   address `172.17.0.1` (or the host's LAN IP). Grafana must listen on that
+   interface (leave `http_addr` empty). Then restart Grafana:
+   `sudo systemctl restart grafana-server`.
+
+3. **Create a token.** In Grafana go to *Administration → Service accounts*,
+   create one with the *Viewer* role, add a token, and store it as
+   `grafana_token` in `config/secrets.json`.
+
+4. **Test it** on the Grafana host:
+   ```
+   curl -s -o /tmp/p.png -w '%{http_code} %{time_total}s\n' \
+     -H "Authorization: Bearer <token>" \
+     "http://localhost:3000/render/d-solo/<uid>/<slug>?panelId=<id>&width=500&height=300"
+   ```
+   `200` means it works. On a Pi 4 expect ~15s per render; the widget allows
+   60s and caches the image for 2 min.
+
+**Widget config.** Take `base_url`, `dashboard_uid` and `dashboard_slug` from
+the dashboard URL, e.g.
+`http://fuji:3000/d/80f95ab5-ae26-4e2d-afe4-934faaac4dde/heizung` →
+`http://fuji:3000`, `80f95ab5-…`, `heizung`. Panel IDs start at 1. You can see
+a panel's ID under *Share → Link → Rendered image* (`panelId=` in the URL), or
+list all panels with:
+```
+curl -s -H "Authorization: Bearer <token>" http://<grafana>:3000/api/dashboards/uid/<uid> \
+  | python3 -c "import json,sys; [print(p['id'], p['title']) for p in json.load(sys.stdin)['dashboard']['panels']]"
+```
+The panel renders with the dashboard's default time range.
+
+**Troubleshooting** (`sudo docker logs grafana-renderer`):
+
+| Symptom | Cause |
+|---|---|
+| "No image renderer available/installed" | `[rendering] server_url` not set, or Grafana not restarted |
+| renderer log: `bind: address already in use` | the host port is taken, so pick another `-p <port>:8081` |
+| renderer log: `net::ERR_CONNECTION_REFUSED` | `callback_url` points at `localhost`; use `172.17.0.1` |
+| widget shows `ReadTimeout` | render took longer than 60s; check the Pi's load and RAM |
+| image says "Panel not found" | wrong `panel_id` |
+
 ## Kindle setup
 
 Jailbreak the Kindle (<https://kindlemodding.org>), install KUAL, then install

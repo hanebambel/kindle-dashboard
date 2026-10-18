@@ -45,12 +45,14 @@ class GrafanaPanelWidget:
         }
         headers = {"Authorization": f"Bearer {token}"}
         try:
-            async with httpx.AsyncClient(base_url=cfg["base_url"], timeout=10.0) as client:
+            # Server-side rendering spins up headless Chromium; on a Pi that can take well over 10s.
+            async with httpx.AsyncClient(base_url=cfg["base_url"], timeout=60.0) as client:
                 resp = await client.get(path, params=params, headers=headers)
                 resp.raise_for_status()
                 png = resp.content
         except httpx.HTTPError as exc:
-            raise WidgetError(f"grafana fetch failed: {exc}") from exc
+            # httpx timeouts stringify to "", so include the type name.
+            raise WidgetError(f"grafana fetch failed: {type(exc).__name__}: {exc}") from exc
 
         b64 = base64.b64encode(png).decode("ascii")
         return {
